@@ -278,11 +278,27 @@ function oyunculariOku(oturum) {
   const onbellekte = jsonOku(k);
   if (onbellekte) return onbellekte;
   const harita = {};
-  oturumSatirlari('katilimcilar', oturum).forEach((r) => {
-    harita[String(r.degerler[1])] = { ad: String(r.degerler[2]), okul_no: String(r.degerler[3]) };
+  const satirlar = oturumSatirlari('katilimcilar', oturum).map((r) => r.degerler)
+    .concat(jsonOku(katilTamponAnahtari(oturum)) || []);
+  satirlar.forEach((r) => {
+    harita[String(r[1])] = { ad: String(r[2]), okul_no: String(r[3]) };
   });
   jsonYaz(k, harita);
   return harita;
+}
+
+function katilTamponAnahtari(oturum) {
+  return 'katil_tampon:' + oturum;
+}
+
+/** Önbellekte bekleyen yeni katılımcıları `katilimcilar` sekmesine yazar. Kilit içinde çağrılır. */
+function katilimcilariBosalt(oturum) {
+  if (!oturum) return;
+  const k = katilTamponAnahtari(oturum);
+  const tampon = jsonOku(k);
+  if (!tampon || !tampon.length) return;
+  satirEkle(sayfa('katilimcilar'), tampon.map((r) => r.slice(0, 4).concat([new Date(r[4])])));
+  onbellek().remove(k);
 }
 
 function tamponAnahtari(oturum, soruNo) {
@@ -342,13 +358,20 @@ function katil(p) {
     let sonAd = ad;
     for (let n = 2; digerAdlar[sonAd.toLocaleLowerCase('tr')]; n++) sonAd = ad + ' ' + n;
 
-    const s = sayfa('katilimcilar');
-    if (oyuncular[id]) {
+    // Yeni katılımcı önce önbellekteki tampona girer; Sheet'e lobi / soru başlangıcında toplu yazılır.
+    const tamponK = katilTamponAnahtari(oturum);
+    const tampon = jsonOku(tamponK) || [];
+    const tampondaki = tampon.filter((r) => r[1] === id)[0];
+    if (tampondaki) {
+      tampondaki[2] = sonAd;
+      tampondaki[3] = okulNo;
+    } else if (oyuncular[id]) {
       const mevcut = oturumSatirlari('katilimcilar', oturum).filter((r) => String(r.degerler[1]) === id)[0];
-      if (mevcut) s.getRange(mevcut.satir, 3, 1, 2).setValues([[sonAd, okulNo]]);
+      if (mevcut) sayfa('katilimcilar').getRange(mevcut.satir, 3, 1, 2).setValues([[sonAd, okulNo]]);
     } else {
-      satirEkle(s, [[oturum, id, sonAd, okulNo, new Date()]]);
+      tampon.push([oturum, id, sonAd, okulNo, Date.now()]);
     }
+    jsonYaz(tamponK, tampon);
     oyuncular[id] = { ad: sonAd, okul_no: okulNo };
     jsonYaz('oyuncular:' + oturum, oyuncular);
     onbellek().remove('cikar:' + oturum + ':' + id);
@@ -422,6 +445,7 @@ function soruBaslat(p) {
     const anahtar = anahtarOku(d.oturum);
     const n = Number(p.soru_no);
     if (!(n >= 1 && n <= anahtar.length)) throw new Red('gecersiz_soru');
+    katilimcilariBosalt(d.oturum);
     tamponuBosalt(d.oturum, d.soru_no);
     const yeni = { oturum: d.oturum, soru_no: n, baslangic_ms: Date.now(), sure_sn: anahtar[n - 1].sure_sn, faz: 'soru' };
     durumYaz(yeni);
@@ -466,6 +490,7 @@ function soruBitir(p) {
 function oturumBitir(p) {
   const d = kilitle(() => {
     const d = aktifOturum(p.oturum);
+    katilimcilariBosalt(d.oturum);
     tamponuBosalt(d.oturum, d.soru_no);
     d.faz = 'bitti';
     durumYaz(d);
@@ -503,6 +528,18 @@ function oturumBitir(p) {
 
 function lobi() {
   const d = durumOku();
+  if (d.oturum && jsonOku(katilTamponAnahtari(d.oturum))) {
+    // Bekleyen katılımcıları Sheet'e aktar; kilit doluysa bir sonraki lobi sorgusuna kalır.
+    const kilit = LockService.getScriptLock();
+    if (kilit.tryLock(500)) {
+      try {
+        katilimcilariBosalt(d.oturum);
+      } finally {
+        SpreadsheetApp.flush();
+        kilit.releaseLock();
+      }
+    }
+  }
   const oyuncular = d.oturum ? oyunculariOku(d.oturum) : {};
   const katilimcilar = Object.keys(oyuncular).map((id) => ({ oyuncu_id: id, ad: oyuncular[id].ad }));
   let cevapSayisi = 0;
@@ -515,6 +552,7 @@ function cikar(p) {
   return kilitle(() => {
     const d = aktifOturum(p.oturum);
     const oyuncular = oyunculariOku(d.oturum);
+    katilimcilariBosalt(d.oturum);
     satirlariSil(sayfa('katilimcilar'),
       oturumSatirlari('katilimcilar', d.oturum).filter((r) => String(r.degerler[1]) === id).map((r) => r.satir));
     delete oyuncular[id];

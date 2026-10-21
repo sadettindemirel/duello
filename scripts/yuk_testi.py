@@ -50,7 +50,7 @@ def config_url() -> str:
 class Istemci:
     url: str
     istatistik: Counter = field(default_factory=Counter)
-    sureler: list[float] = field(default_factory=list)
+    sureler: dict[str, list[float]] = field(default_factory=dict)
     kilit: threading.Lock = field(default_factory=threading.Lock)
 
     def _tek(self, yontem: str, veri: dict) -> dict:
@@ -71,7 +71,7 @@ class Istemci:
             raise IstekHatasi("ag") from hata
         finally:
             with self.kilit:
-                self.sureler.append(time.perf_counter() - baslangic)
+                self.sureler.setdefault(veri["action"], []).append(time.perf_counter() - baslangic)
         try:
             json_ = json.loads(govde)
         except json.JSONDecodeError:
@@ -175,8 +175,10 @@ def calistir(url: str, anahtar: str, oyuncu_sayisi: int, sure: int, aralik: floa
     print(f"Kayıp cevap          : {kayip}")
     print(f"Dağılım (gönderilen) : {beklenen_dagilim}")
     print(f"Dağılım (Sheet)      : {sonuc['dagilim']}")
-    print(f"İstek süresi         : medyan {statistics.median(istemci.sureler):.2f} sn, "
-          f"p95 {yuzdelik(istemci.sureler, 0.95):.2f} sn, en çok {max(istemci.sureler):.2f} sn")
+    print("İstek süresi (sn)    :")
+    for action, sureler in sorted(istemci.sureler.items()):
+        print(f"  {action:<14} medyan {statistics.median(sureler):5.2f}  p95 {yuzdelik(sureler, 0.95):5.2f}  "
+              f"en çok {max(sureler):5.2f}  ({len(sureler)} istek)")
     print("İstek sonuçları      :")
     for anahtar_, sayi in sorted(istemci.istatistik.items()):
         print(f"  {anahtar_:<28} {sayi}")
