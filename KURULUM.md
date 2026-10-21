@@ -33,7 +33,9 @@
 **Soru düzenleyici güncellemesi (bir kez):** yeni `Code.gs`'i yapıştırdıktan sonra **`kurulum`**'u yeniden çalıştırın.
 `setler` ve `sorular` sekmelerini ekler (mevcut verilere dokunmaz) ve görsel yükleme için **Google Drive izni** ister;
 onaylayın. Ardından yukarıdaki gibi **Yeni sürüm** dağıtın. Yeni sürümün yayında olduğunu
-`?action=durum` yanıtındaki `"surum":"2026-10-21d"` gösterir.
+`?action=durum` yanıtındaki `"surum"` değeri gösterir (şu an `2026-10-21e`).
+
+> `durum` sekmesi artık kullanılmıyor (anlık durum Script Properties'te); silebilirsiniz.
 
 ### 2. Siteyi web app'e bağlama
 
@@ -62,8 +64,12 @@ geçerse `site/` klasörünü yayınlar. Hatalı soru dosyası canlıya çıkmaz
 
 - Doğru cevap: `1000 × (1 − geçen_ms / (süre × 1000) / 2)`; anında 1000, son saniyede 500. Yanlış/boş: 0.
 - Sunucu tarafında 1,5 sn ağ toleransı vardır.
-- Soru sırasında cevaplar Apps Script önbelleğinde toplanır, soru kapanınca tek seferde `cevaplar` sekmesine yazılır
-  (50 eşzamanlı cevapta kilit beklemesini kısa tutmak için).
+- Puan, telefonun soruyu ilk gördüğü andan sayılır (en fazla 3 sn indirim); böylece telefonun 2 sn'lik sorgusunun
+  soru başlangıcına denk gelip gelmemesi puanı etkilemez.
+- Hız için: yarışmanın anlık durumu önbellekte ve Script Properties'te tutulur. Katılımcılar ve cevaplar önce önbelleğe
+  yazılır, Sheet'e soru kapanınca tek seferde aktarılır. Soru başlatma ve lobi sorgusu Sheet'e hiç dokunmaz.
+  Bir Apps Script isteği en az ~1,4 sn sürer (Google'ın yönlendirmesi); uzun aradan sonraki ilk istek ~10 sn sürebilir,
+  bu yüzden tahta açılır açılmaz sunucuyu bir istekle ısıtır.
 - Oturum bitince `puanlar` yazılır ve `donem` baştan hesaplanır. Okul no girilmişse eşleştirme okul no ile,
   değilse telefonun sakladığı görünmez `oyuncu_id` ile yapılır. İki satırı birleştirmek için `puanlar` sekmesinde
   `okul_no`'yu düzeltip **Düello → Dönem tablosunu yeniden hesapla**'yı çalıştırın.

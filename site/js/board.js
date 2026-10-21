@@ -5,7 +5,7 @@
   const SEKILLER = ["▲", "◆", "●", "■"];
   const SINIFLAR = ["sik-a", "sik-b", "sik-c", "sik-d"];
   const TOLERANS_MS = 1500; // sunucudaki tolerans kadar bekleyip soruyu kapat
-  const LOBI_ARALIK_MS = 2000;
+  const LOBI_ARALIK_MS = 1500;
 
   const Ses = window.DuelloSes;
 
@@ -327,11 +327,13 @@
     );
   }
 
+  /** Soru, sunucu yanıtını (~1,5 sn) beklemeden tahtada açılır; sayaç ve müzik yanıt gelince başlar. */
   async function soruBaslat(n) {
-    const r = await ogretmen("soruBaslat", { soru_no: n });
-    if (!r) return;
-    durum.soruNo = n;
+    if (mesgul) return;
+    const oncekiNo = durum.soruNo;
+    const oncekiEkran = durum.faz;
     const soru = durum.set.sorular[n - 1];
+    durum.soruNo = n;
     $("soru-metni").textContent = soru.metin;
     const gorsel = $("soru-gorseli");
     gorsel.hidden = !soru.gorsel;
@@ -339,7 +341,17 @@
     sikListesi($("soru-siklar"), soru);
     $("soru-cevap-sayisi").textContent = `0 / ${durum.katilimciSayisi} cevapladı`;
     $("sure-doldu").hidden = true;
+    clearInterval(sayacZamanlayici);
+    $("soru-sayac").textContent = soru.sure;
+    $("sure-dolgu").style.width = "100%";
+    Ses.durdur();
     ekran("soru");
+    const r = await ogretmen("soruBaslat", { soru_no: n });
+    if (!r) {
+      durum.soruNo = oncekiNo;
+      ekran(oncekiEkran);
+      return;
+    }
     sayacBaslat(r.sure_sn);
     Ses.soruMuzigi(r.sure_sn);
   }
@@ -531,6 +543,8 @@
   sesGuncelle();
   if (!D.ayar.APPS_SCRIPT_URL) bildir(D.hataMetni({ kod: "ayar_yok" }));
   qrCiz();
+  // Apps Script uzun süre çağrılmayınca ilk istek ~10 sn sürer; öğretmen oturumu açmadan ısıt.
+  D.get("durum", {}, 0).catch(() => {});
   setleriYukle();
   devamKutusu();
   ekran("acilis");

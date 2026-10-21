@@ -10,13 +10,14 @@
  *
  * Soru sırasında gelen cevaplar önce önbellekteki bir tampona yazılır, soru bitince tek seferde
  * `cevaplar` sekmesine aktarılır. Kilitli bölüm böylece kısa kalır ve 50 eşzamanlı cevap sıraya girmez.
+ * Yarışmanın anlık durumu (aktif soru, faz) önbellekte ve Script Properties'te tutulur; Sheet'e yazmak
+ * her geçişe yarım-bir saniye eklediği için Sheet yalnızca kalıcı kayıtlar (katılımcı, cevap, puan) içindir.
  *
  * Soru setleri `setler` (başlık, varsayılan süre) ve `sorular` (her satır bir soru) sekmelerinde durur.
  * Soru düzenleyici (site/duzenle.html) bunları yazar; öğretmen Sheet'e doğrudan da yazabilir.
  */
 
 const SEKMELER = {
-  durum: ['oturum', 'soru_no', 'baslangic_ms', 'sure_sn', 'faz'],
   katilimcilar: ['oturum', 'oyuncu_id', 'ad', 'okul_no', 'katilma_zamani'],
   cevaplar: ['sunucu_zamani', 'oturum', 'oyuncu_id', 'ad', 'soru_no', 'sik', 'sure_ms', 'dogru_mu', 'puan'],
   anahtar: ['oturum', 'soru_no', 'dogru', 'sure_sn'],
@@ -29,9 +30,12 @@ const SEKMELER = {
 const METIN_SUTUNLARI = ['oturum', 'oyuncu_id', 'ad', 'son_ad', 'okul_no', 'id', 'baslik',
   'set', 'soru', 'gorsel', 'A', 'B', 'C', 'D', 'dogru', 'kazanim'];
 
-const SURUM = '2026-10-21d'; // durum yanıtında döner; hangi dağıtımın yayında olduğunu gösterir
+const SURUM = '2026-10-21e'; // durum yanıtında döner; hangi dağıtımın yayında olduğunu gösterir
 const HARFLER = ['A', 'B', 'C', 'D'];
 const TOLERANS_MS = 1500;
+// Puan, telefonun soruyu ilk gördüğü andan sayılır (2 sn'lik sorgu aralığına denk gelen kaybetmesin);
+// bu indirim en fazla bu kadardır, böylece sorguyu bilerek geciktirmek avantaj sağlamaz.
+const GORME_PAYI_MS = 3000;
 const ONBELLEK_SN = 21600; // CacheService üst sınırı (6 saat)
 const KILIT_BEKLEME_MS = 20000;
 const AD_UZUNLUK = 20;
@@ -71,8 +75,6 @@ function kurulum() {
   sorular.getRange(2, SEKMELER.sorular.indexOf('dogru') + 1, sorular.getMaxRows() - 1, 1).setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(HARFLER).setAllowInvalid(false).build());
   gorselKlasoru(); // Drive iznini kurulumda iste; görsel yükleme ilk derste izin beklemesin.
-  const durum = ss.getSheetByName('durum');
-  if (durum.getLastRow() < 2) durum.getRange(2, 1, 1, 5).setValues([['', 0, 0, 0, 'bekle']]);
 
   const ozellikler = PropertiesService.getScriptProperties();
   let anahtar = ozellikler.getProperty('OGRETMEN_ANAHTARI');
@@ -285,20 +287,15 @@ function uygunsuzMu(ad) {
 function durumOku() {
   const d = jsonOku('durum');
   if (d) return d;
-  const v = sayfa('durum').getRange(2, 1, 1, 5).getValues()[0];
-  const okunan = {
-    oturum: String(v[0] || ''),
-    soru_no: Number(v[1]) || 0,
-    baslangic_ms: Number(v[2]) || 0,
-    sure_sn: Number(v[3]) || 0,
-    faz: String(v[4] || 'bekle'),
-  };
+  const kayitli = PropertiesService.getScriptProperties().getProperty('DURUM');
+  const okunan = kayitli ? JSON.parse(kayitli) : { oturum: '', soru_no: 0, baslangic_ms: 0, sure_sn: 0, faz: 'bekle' };
   jsonYaz('durum', okunan);
   return okunan;
 }
 
+/** Önbellek hızlı okuma için; Script Properties önbellek silinirse diye kalıcı kopya. */
 function durumYaz(d) {
-  sayfa('durum').getRange(2, 1, 1, 5).setValues([[d.oturum, d.soru_no, d.baslangic_ms, d.sure_sn, d.faz]]);
+  PropertiesService.getScriptProperties().setProperty('DURUM', JSON.stringify(d));
   jsonYaz('durum', d);
 }
 
@@ -359,14 +356,22 @@ function cevapAnahtari(oturum, soruNo, oyuncuId) {
   return 'cevap:' + oturum + ':' + soruNo + ':' + oyuncuId;
 }
 
-/** Soru sırasında önbellekte biriken cevapları `cevaplar` sekmesine yazar. Kilit içinde çağrılır. */
+function gorduAnahtari(oturum, soruNo, oyuncuId) {
+  return 'gordu:' + oturum + ':' + soruNo + ':' + oyuncuId;
+}
+
+/**
+ * Soru sırasında önbellekte biriken cevapları `cevaplar` sekmesine yazar ve yazılan satırları döner
+ * (boşsa []). Kilit içinde çağrılır.
+ */
 function tamponuBosalt(oturum, soruNo) {
-  if (!oturum || !soruNo) return;
+  if (!oturum || !soruNo) return [];
   const k = tamponAnahtari(oturum, soruNo);
   const tampon = jsonOku(k);
-  if (!tampon || !tampon.length) return;
+  if (!tampon || !tampon.length) return [];
   satirEkle(sayfa('cevaplar'), tampon.map((r) => [new Date(r[0])].concat(r.slice(1))));
   onbellek().remove(k);
+  return tampon;
 }
 
 // ───────────────────────────── Telefon ─────────────────────────────
@@ -379,23 +384,29 @@ function durumSorgu(p) {
   if (id && d.oturum) {
     const cevapK = cevapAnahtari(d.oturum, d.soru_no, id);
     const cikarK = 'cikar:' + d.oturum + ':' + id;
-    const degerler = onbellek().getAll([cevapK, cikarK]);
+    const gorduK = gorduAnahtari(d.oturum, d.soru_no, id);
+    const degerler = onbellek().getAll([cevapK, cikarK, gorduK]);
     if (degerler[cikarK]) yanit.cikarildi = true;
-    if (d.faz === 'soru') yanit.cevapladi = !!degerler[cevapK];
+    if (d.faz === 'soru') {
+      yanit.cevapladi = !!degerler[cevapK];
+      if (!degerler[cevapK] && !degerler[gorduK]) onbellek().put(gorduK, String(Date.now()), ONBELLEK_SN);
+    }
     if (d.faz === 'sonuc') yanit.sonuc = degerler[cevapK] ? JSON.parse(degerler[cevapK]) : null;
   }
   return yanit;
 }
 
+/** `oturum` boşsa aktif oturuma katılır; telefon böylece önce durum sormadan tek istekte katılabilir. */
 function katil(p) {
-  const oturum = String(p.oturum || '');
   const id = String(p.oyuncu_id || '').slice(0, 64);
   const ad = adiTemizle(p.ad);
   let okulNo = String(p.okul_no || '').trim().slice(0, 20);
   if (!id) throw new Red('gecersiz_istek');
   if (!ad) throw new Red('ad_bos');
   if (uygunsuzMu(ad)) throw new Red('uygunsuz_ad');
-  const d = aktifOturum(oturum);
+  const d = p.oturum ? aktifOturum(String(p.oturum)) : durumOku();
+  const oturum = d.oturum;
+  if (!oturum) throw new Red('oturum_yok');
   if (d.faz === 'bitti') throw new Red('oturum_bitti');
 
   return kilitle(() => {
@@ -434,7 +445,7 @@ function katil(p) {
     yazilacak[oyuncularK] = oyuncular;
     jsonYazHepsi(yazilacak);
     if (okunan[cikarK]) onbellek().remove(cikarK);
-    return { ad: sonAd };
+    return { ad: sonAd, oturum: oturum };
   }, false);
 }
 
@@ -451,7 +462,8 @@ function cevap(p) {
     const tamponK = tamponAnahtari(oturum, soruNo);
     const oyuncularK = 'oyuncular:' + oturum;
     const anahtarK = 'anahtar:' + oturum;
-    const okunan = jsonOkuHepsi(['durum', cevapK, tamponK, oyuncularK, anahtarK]);
+    const gorduK = gorduAnahtari(oturum, soruNo, id);
+    const okunan = jsonOkuHepsi(['durum', cevapK, tamponK, oyuncularK, anahtarK, gorduK]);
 
     const d = okunan.durum || durumOku();
     if (d.oturum !== oturum) throw new Red('oturum_yok');
@@ -464,7 +476,8 @@ function cevap(p) {
 
     const dogru = (okunan[anahtarK] || anahtarOku(oturum))[soruNo - 1].dogru;
     const dogruMu = sik === dogru;
-    const puan = dogruMu ? puanHesapla(sureMs, d.sure_sn) : 0;
+    const gordu = Math.min(Math.max(Number(okunan[gorduK]) || 0, d.baslangic_ms), d.baslangic_ms + GORME_PAYI_MS);
+    const puan = dogruMu ? puanHesapla(simdi - gordu, d.sure_sn) : 0;
 
     const tampon = okunan[tamponK] || [];
     tampon.push([simdi, oturum, id, oyuncu.ad, soruNo, HARFLER[sik], sureMs, dogruMu, puan]);
@@ -495,39 +508,85 @@ function oturumBaslat(p) {
     const s = sayfa('anahtar');
     satirlariSil(s, oturumSatirlari('anahtar', oturum).map((r) => r.satir));
     satirEkle(s, anahtar.map((a, i) => [oturum, i + 1, a.dogru, a.sure_sn]));
-    jsonYaz('anahtar:' + oturum, anahtar);
+    const yazilacak = {};
+    yazilacak['anahtar:' + oturum] = anahtar;
+    yazilacak[toplamAnahtari(oturum)] = {};
+    jsonYazHepsi(yazilacak);
     onbellek().remove('oyuncular:' + oturum);
     durumYaz({ oturum: oturum, soru_no: 0, baslangic_ms: 0, sure_sn: 0, faz: 'bekle' });
     return { oturum: oturum, soru_sayisi: anahtar.length };
   });
 }
 
+/** Tahtanın en çok beklediği istek: Sheet'e dokunmaz (katılımcılar ve cevaplar soru bitince yazılır). */
 function soruBaslat(p) {
   return kilitle(() => {
     const d = aktifOturum(p.oturum);
     const anahtar = anahtarOku(d.oturum);
     const n = Number(p.soru_no);
     if (!(n >= 1 && n <= anahtar.length)) throw new Red('gecersiz_soru');
-    katilimcilariBosalt(d.oturum);
-    tamponuBosalt(d.oturum, d.soru_no);
+    tamponuBosalt(d.oturum, d.soru_no); // önceki soru bitirilmeden geçildiyse; normalde boştur
     const yeni = { oturum: d.oturum, soru_no: n, baslangic_ms: Date.now(), sure_sn: anahtar[n - 1].sure_sn, faz: 'soru' };
     durumYaz(yeni);
     return { soru_no: n, sure_sn: yeni.sure_sn };
-  });
+  }, false);
 }
 
+function toplamAnahtari(oturum) {
+  return 'toplamlar:' + oturum;
+}
+
+/**
+ * Soruyu kapatır, cevapları ve bekleyen katılımcıları Sheet'e yazar, şık dağılımını ve ilk 5'i döner.
+ * Oturumun puan toplamları önbellekte tutulur; her soruda yalnızca o sorunun cevapları eklenir.
+ * Aynı soru ikinci kez bitirilirse (tahta yenilendi) önbellekteki sonuç döner.
+ */
 function soruBitir(p) {
-  const d = kilitle(() => {
+  return kilitle(() => {
     const d = aktifOturum(p.oturum);
     if (d.soru_no < 1) throw new Red('gecersiz_soru');
     if (d.faz === 'soru') {
       d.faz = 'sonuc';
       durumYaz(d);
     }
-    tamponuBosalt(d.oturum, d.soru_no);
-    return d;
-  });
+    const sonucK = 'sonuc:' + d.oturum + ':' + d.soru_no;
+    const toplamK = toplamAnahtari(d.oturum);
+    const okunan = jsonOkuHepsi([sonucK, toplamK]);
+    const yeniCevaplar = tamponuBosalt(d.oturum, d.soru_no);
+    katilimcilariBosalt(d.oturum);
+    if (okunan[sonucK] && !yeniCevaplar.length) return okunan[sonucK];
 
+    let dagilim = [0, 0, 0, 0];
+    let toplamlar = okunan[toplamK];
+    if (toplamlar && !okunan[sonucK]) {
+      yeniCevaplar.forEach((r) => {
+        dagilim[HARFLER.indexOf(r[5])]++;
+        const t = toplamlar[r[2]] || (toplamlar[r[2]] = { ad: r[3], puan: 0 });
+        t.ad = r[3];
+        t.puan += r[8];
+      });
+    } else {
+      // Önbellek silinmiş ya da soru ikinci kez bitirilip yeni cevap gelmiş: Sheet'ten baştan hesapla.
+      const hesap = soruSonucuSheetten(d);
+      dagilim = hesap.dagilim;
+      toplamlar = hesap.toplamlar;
+    }
+    const sonuc = {
+      soru_no: d.soru_no,
+      dogru: anahtarOku(d.oturum)[d.soru_no - 1].dogru,
+      dagilim: dagilim,
+      cevap_sayisi: dagilim.reduce((a, b) => a + b, 0),
+      ilk5: Object.keys(toplamlar).map((id) => toplamlar[id]).sort((a, b) => b.puan - a.puan).slice(0, 5),
+    };
+    const yazilacak = {};
+    yazilacak[sonucK] = sonuc;
+    yazilacak[toplamK] = toplamlar;
+    jsonYazHepsi(yazilacak);
+    return sonuc;
+  });
+}
+
+function soruSonucuSheetten(d) {
   const dagilim = [0, 0, 0, 0];
   const toplamlar = {};
   oturumSatirlari('cevaplar', d.oturum).forEach((r) => {
@@ -538,16 +597,7 @@ function soruBitir(p) {
     t.ad = String(v[3]);
     t.puan += Number(v[8]) || 0;
   });
-  const ilk5 = Object.keys(toplamlar).map((id) => toplamlar[id])
-    .sort((a, b) => b.puan - a.puan)
-    .slice(0, 5);
-  return {
-    soru_no: d.soru_no,
-    dogru: anahtarOku(d.oturum)[d.soru_no - 1].dogru,
-    dagilim: dagilim,
-    cevap_sayisi: dagilim.reduce((a, b) => a + b, 0),
-    ilk5: ilk5,
-  };
+  return { dagilim: dagilim, toplamlar: toplamlar };
 }
 
 function oturumBitir(p) {
@@ -589,25 +639,19 @@ function oturumBitir(p) {
   };
 }
 
+/** Tahta 1,5 sn'de bir sorar; yalnızca önbellekten okur, kilit almaz (katılımlar sıra beklemesin). */
 function lobi() {
   const d = durumOku();
-  if (d.oturum && jsonOku(katilTamponAnahtari(d.oturum))) {
-    // Bekleyen katılımcıları Sheet'e aktar; kilit doluysa bir sonraki lobi sorgusuna kalır.
-    const kilit = LockService.getScriptLock();
-    if (kilit.tryLock(500)) {
-      try {
-        katilimcilariBosalt(d.oturum);
-      } finally {
-        SpreadsheetApp.flush();
-        kilit.releaseLock();
-      }
-    }
-  }
-  const oyuncular = d.oturum ? oyunculariOku(d.oturum) : {};
-  const katilimcilar = Object.keys(oyuncular).map((id) => ({ oyuncu_id: id, ad: oyuncular[id].ad }));
-  let cevapSayisi = 0;
-  if (d.faz === 'soru') cevapSayisi = (jsonOku(tamponAnahtari(d.oturum, d.soru_no)) || []).length;
-  return { durum: d, katilimcilar: katilimcilar, cevap_sayisi: cevapSayisi };
+  if (!d.oturum) return { durum: d, katilimcilar: [], cevap_sayisi: 0 };
+  const oyuncularK = 'oyuncular:' + d.oturum;
+  const tamponK = tamponAnahtari(d.oturum, d.soru_no);
+  const okunan = jsonOkuHepsi([oyuncularK, tamponK]);
+  const oyuncular = okunan[oyuncularK] || oyunculariOku(d.oturum);
+  return {
+    durum: d,
+    katilimcilar: Object.keys(oyuncular).map((id) => ({ oyuncu_id: id, ad: oyuncular[id].ad })),
+    cevap_sayisi: d.faz === 'soru' ? (okunan[tamponK] || []).length : 0,
+  };
 }
 
 function cikar(p) {
