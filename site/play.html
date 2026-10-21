@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#1e1b4b">
+  <title>Düello</title>
+  <link rel="stylesheet" href="css/ortak.css">
+  <link rel="stylesheet" href="css/play.css">
+</head>
+<body>
+  <header class="ust" id="ust" hidden>
+    <span id="ust-ad"></span>
+    <button type="button" class="baglanti" id="degistir">değiştir</button>
+  </header>
+
+  <main>
+    <section data-ekran="giris" class="giris">
+      <h1>Düello</h1>
+      <form id="giris-formu" autocomplete="off">
+        <label for="ad">Adın</label>
+        <div class="ad-satiri">
+          <input class="alan" id="ad" maxlength="20" placeholder="Adını yaz" autocapitalize="words">
+          <button type="button" class="dugme ikincil zar" id="zar" title="Rastgele ad" aria-label="Rastgele ad">🎲</button>
+        </div>
+        <label for="okul-no">Okul numarası <span class="soluk">(isteğe bağlı, tahtada görünmez)</span></label>
+        <input class="alan" id="okul-no" maxlength="20" inputmode="numeric" placeholder="Örn. 1234">
+        <p class="hata-kutusu" id="giris-hata" hidden></p>
+        <button class="dugme genis" type="submit">Katıl</button>
+      </form>
+    </section>
+
+    <section data-ekran="bekle" class="ortala" hidden>
+      <div class="buyuk-ikon">👀</div>
+      <h2 id="bekle-baslik">Tahtaya bak</h2>
+      <p class="soluk" id="bekle-metin"></p>
+    </section>
+
+    <section data-ekran="soru" class="soru" hidden>
+      <p class="soru-no" id="soru-no"></p>
+      <div class="siklar" id="siklar">
+        <button type="button" class="sik sik-a" data-sik="0"><span>▲</span>A</button>
+        <button type="button" class="sik sik-b" data-sik="1"><span>◆</span>B</button>
+        <button type="button" class="sik sik-c" data-sik="2"><span>●</span>C</button>
+        <button type="button" class="sik sik-d" data-sik="3"><span>■</span>D</button>
+      </div>
+    </section>
+
+    <section data-ekran="gonderildi" class="ortala" hidden>
+      <div class="buyuk-ikon" id="gonderildi-ikon">✓</div>
+      <h2 id="gonderildi-baslik">Cevabın alındı</h2>
+      <p class="soluk" id="gonderildi-metin">Süre bitince sonucunu göreceksin.</p>
+    </section>
+
+    <section data-ekran="sonuc" class="ortala" hidden>
+      <div class="buyuk-ikon" id="sonuc-ikon"></div>
+      <h2 id="sonuc-baslik"></h2>
+      <p class="puan" id="sonuc-puan"></p>
+    </section>
+
+    <section data-ekran="bitti" class="ortala" hidden>
+      <div class="buyuk-ikon">🏁</div>
+      <h2>Yarışma bitti</h2>
+      <p class="soluk">Katıldığın için teşekkürler! Sonuçlar tahtada.</p>
+    </section>
+  </main>
+
+  <p class="baglanti-uyari" id="baglanti-uyari" hidden>Bağlantı sorunu, yeniden deneniyor…</p>
+
+  <script src="config.js"></script>
+  <script src="js/ortak.js"></script>
+  <script src="js/adlar.js"></script>
+  <script src="js/play.js"></script>
+</body>
+</html>

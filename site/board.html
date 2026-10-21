@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Düello — Tahta</title>
+  <link rel="stylesheet" href="css/ortak.css">
+  <link rel="stylesheet" href="css/board.css">
+</head>
+<body>
+  <header class="ust">
+    <div class="logo">Düello</div>
+    <div class="ust-baslik" id="ust-baslik"></div>
+    <div class="ust-sag">
+      <span class="rozet" id="ust-katilimci" hidden></span>
+      <button type="button" class="dugme ikincil kucuk" id="gizle-dugme" hidden>Puanları göster (G)</button>
+      <button type="button" class="dugme ikincil kucuk" id="tam-ekran" title="Tam ekran (F)">⛶</button>
+    </div>
+  </header>
+
+  <p class="bildirim" id="bildirim" hidden></p>
+
+  <main>
+    <!-- 1. Açılış -->
+    <section data-ekran="acilis" class="acilis">
+      <form id="acilis-formu" class="kart" autocomplete="off">
+        <h1>Yarışmayı hazırla</h1>
+        <label for="anahtar">Öğretmen anahtarı</label>
+        <input class="alan" id="anahtar" type="password" placeholder="Apps Script kurulumunda verilen anahtar">
+        <label for="soru-seti">Soru seti</label>
+        <select class="alan" id="soru-seti"></select>
+        <div class="dugmeler">
+          <button class="dugme" type="submit">Oturumu aç</button>
+          <button class="dugme ikincil" type="button" id="donem-ac">Dönem tablosu</button>
+        </div>
+        <div class="devam" id="devam" hidden>
+          <span id="devam-metin"></span>
+          <button class="dugme ikincil kucuk" type="button" id="devam-dugme">Kaldığın yerden devam et</button>
+        </div>
+      </form>
+      <div class="qr-alani">
+        <div class="qr" data-qr></div>
+        <p class="kisa-url" data-kisa-url></p>
+      </div>
+    </section>
+
+    <!-- 2. Lobi -->
+    <section data-ekran="lobi" class="lobi" hidden>
+      <div class="qr-alani">
+        <p class="davet">Telefonundan katıl</p>
+        <div class="qr" data-qr></div>
+        <p class="kisa-url" data-kisa-url></p>
+      </div>
+      <div class="lobi-sag">
+        <h2><span id="lobi-sayi">0</span> öğrenci katıldı</h2>
+        <p class="soluk" id="lobi-sonraki"></p>
+        <ul class="adlar" id="lobi-adlar"></ul>
+        <p class="soluk kucuk-yazi">Bir ada tıklayarak öğrenciyi çıkarabilirsiniz.</p>
+      </div>
+    </section>
+
+    <!-- 3. Soru -->
+    <section data-ekran="soru" class="soru-ekrani" hidden>
+      <div class="soru-bilgi">
+        <span id="soru-sayac" class="sayac">20</span>
+        <span id="soru-cevap-sayisi" class="rozet"></span>
+      </div>
+      <h2 class="soru-metni" id="soru-metni"></h2>
+      <img class="soru-gorseli" id="soru-gorseli" alt="" hidden>
+      <div class="sure-cubugu"><div id="sure-dolgu"></div></div>
+      <ol class="secenekler" id="soru-siklar"></ol>
+      <p class="sure-doldu" id="sure-doldu" hidden>Süre doldu!</p>
+    </section>
+
+    <!-- 4. Sonuç -->
+    <section data-ekran="sonuc" class="sonuc-ekrani" hidden>
+      <h2 class="soru-metni kucuk" id="sonuc-metni"></h2>
+      <div class="sonuc-govde">
+        <div class="dagilim" id="sonuc-dagilim"></div>
+        <div class="puan-paneli">
+          <h3>İlk 5</h3>
+          <ol class="liste" id="sonuc-ilk5"></ol>
+        </div>
+      </div>
+      <ol class="secenekler sonuc" id="sonuc-siklar"></ol>
+    </section>
+
+    <!-- 5. Podyum -->
+    <section data-ekran="podyum" class="podyum-ekrani" hidden>
+      <div class="puan-paneli">
+        <div class="podyum" id="podyum"></div>
+        <ol class="liste uzun" id="tam-siralama"></ol>
+      </div>
+      <div class="dugmeler orta">
+        <button class="dugme ikincil" type="button" id="podyum-donem">Dönem tablosu</button>
+        <button class="dugme ikincil" type="button" id="yeni-oturum">Yeni oturum</button>
+      </div>
+    </section>
+
+    <!-- 6. Dönem tablosu -->
+    <section data-ekran="donem" class="donem-ekrani" hidden>
+      <h2>Dönem tablosu</h2>
+      <div class="puan-paneli">
+        <table class="tablo">
+          <thead>
+            <tr><th>#</th><th>Ad</th><th>Ders</th><th>Toplam puan</th><th>Doğru oranı</th></tr>
+          </thead>
+          <tbody id="donem-satirlar"></tbody>
+        </table>
+      </div>
+      <div class="dugmeler orta">
+        <button class="dugme ikincil" type="button" id="donem-geri">Geri</button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="alt">
+    <span class="soluk"><kbd>Boşluk</kbd> sonraki adım · <kbd>F</kbd> tam ekran · <kbd>G</kbd> puanları gizle/göster</span>
+    <button type="button" class="dugme" id="ileri" hidden>İleri ▶</button>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script src="config.js"></script>
+  <script src="js/ortak.js"></script>
+  <script src="js/board.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "id": "ornek",
+  "baslik": "Örnek Set — Atom ve Periyodik Sistem",
+  "varsayilan_sure": 20,
+  "sorular": [
+    {
+      "metin": "Periyodik tabloda aynı gruptaki elementlerin ortak özelliği nedir?",
+      "gorsel": null,
+      "siklar": ["Kütle numarası", "Değerlik elektron sayısı", "Nötron sayısı", "Yoğunluk"],
+      "dogru": 1,
+      "sure": 20,
+      "kazanim": "9.2.1"
+    },
+    {
+      "metin": "Bir atomun çekirdeğinde hangi tanecikler bulunur?",
+      "siklar": ["Proton ve elektron", "Yalnızca elektron", "Proton ve nötron", "Nötron ve elektron"],
+      "dogru": 2
+    },
+    {
+      "metin": "Atom numarası 11 olan sodyum (Na) hangi grupta yer alır?",
+      "siklar": ["1A (alkali metaller)", "2A (toprak alkali metaller)", "7A (halojenler)", "8A (soy gazlar)"],
+      "dogru": 0,
+      "sure": 15
+    },
+    {
+      "metin": "Aşağıdakilerden hangisi bir soy gazdır?",
+      "siklar": ["Oksijen", "Azot", "Klor", "Neon"],
+      "dogru": 3,
+      "sure": 10
+    }
+  ]
+}

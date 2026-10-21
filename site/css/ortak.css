@@ -1,0 +1,100 @@
+:root {
+  --zemin: #1e1b4b;
+  --zemin-2: #2e2a6b;
+  --kart: #ffffff;
+  --metin: #ffffff;
+  --metin-koyu: #1f2937;
+  --soluk: #c7c4f0;
+  --vurgu: #facc15;
+  --basari: #22c55e;
+  --hata: #ef4444;
+  --a: #e21b3c;
+  --b: #1368ce;
+  --c: #d89e00;
+  --d: #26890c;
+  --yaricap: 14px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--zemin);
+  color: var(--metin);
+  line-height: 1.35;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.dugme {
+  border: 0;
+  border-radius: var(--yaricap);
+  padding: 0.7em 1.4em;
+  font-weight: 700;
+  background: var(--vurgu);
+  color: var(--metin-koyu);
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
+}
+
+.dugme:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.dugme:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dugme.ikincil {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--metin);
+}
+
+.alan {
+  width: 100%;
+  padding: 0.7em 0.9em;
+  border-radius: var(--yaricap);
+  border: 2px solid transparent;
+  background: var(--kart);
+  color: var(--metin-koyu);
+}
+
+.alan:focus {
+  outline: none;
+  border-color: var(--vurgu);
+}
+
+.hata-kutusu {
+  background: var(--hata);
+  color: #fff;
+  padding: 0.6em 1em;
+  border-radius: var(--yaricap);
+  font-weight: 600;
+}
+
+.sik-a { background: var(--a); }
+.sik-b { background: var(--b); }
+.sik-c { background: var(--c); }
+.sik-d { background: var(--d); }
+
+.soluk {
+  color: var(--soluk);
+}
