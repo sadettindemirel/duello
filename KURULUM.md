@@ -30,6 +30,11 @@
 > `Code.gs`'i sonradan değiştirirseniz **Dağıt → Dağıtımları yönet → Düzenle → Sürüm: Yeni sürüm** ile
 > güncelleyin; böylece URL değişmez.
 
+**Soru düzenleyici güncellemesi (bir kez):** yeni `Code.gs`'i yapıştırdıktan sonra **`kurulum`**'u yeniden çalıştırın.
+`setler` ve `sorular` sekmelerini ekler (mevcut verilere dokunmaz) ve görsel yükleme için **Google Drive izni** ister;
+onaylayın. Ardından yukarıdaki gibi **Yeni sürüm** dağıtın. Yeni sürümün yayında olduğunu
+`?action=durum` yanıtındaki `"surum":"2026-10-21d"` gösterir.
+
 ### 2. Siteyi web app'e bağlama
 
 [site/config.js](site/config.js) içindeki `APPS_SCRIPT_URL` değerine 5. adımdaki adresi yazıp push edin.
@@ -40,6 +45,18 @@ Bu adres gizli değildir; öğretmen anahtarı olmadan yalnızca öğrenci işle
 Repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 Her push'ta [yayinla.yml](.github/workflows/yayinla.yml) soru dosyalarını doğrular ve testleri çalıştırır;
 geçerse `site/` klasörünü yayınlar. Hatalı soru dosyası canlıya çıkmaz.
+
+## Soru setleri (teknik)
+
+- `setler` sekmesi: `id` (kısa ad), `baslik`, `varsayilan_sure`, `guncelleme`. `sorular` sekmesi: her satır bir soru
+  (`set`, `soru`, `gorsel`, `A`–`D`, `dogru` = A/B/C/D, `sure`, `kazanim`); sıra satır sırasıdır.
+  `setler`'de satırı olmayan bir set de listelenir (başlık = kısa ad, süre = 20).
+- Setleri yalnızca öğretmen anahtarıyla okunur; cevap anahtarı repodaki JSON dosyalarının aksine herkese açık değildir.
+- Yüklenen görseller Drive'da *Düello görselleri* klasörüne "bağlantıya sahip herkes görüntüleyebilir" olarak kaydedilir.
+  Drive linkleri tahtada `drive.google.com/thumbnail?id=…` adresine çevrilerek gösterilir.
+  Okul hesabı (Workspace) kullanıyorsanız yöneticiniz dışarıya paylaşımı kapatmış olabilir; o zaman görseller açılmaz.
+- Tahta oturumu açarken bütün görselleri önceden indirir; açılmayan varsa soru numaralarını söyler.
+- Sesler [ses.js](site/js/ses.js) içinde Web Audio ile üretilir (ses dosyası yok).
 
 ## Puanlama ve Sheet (teknik)
 
@@ -67,7 +84,7 @@ Bittiğinde `katilimcilar`, `anahtar`, `cevaplar` sekmelerindeki `yuk-testi_` sa
 ## Klasörler
 
 ```
-site/            GitHub Pages'e yayınlanan statik site (board.html, play.html, config.js, css/, js/, sorular/)
+site/            GitHub Pages'e yayınlanan statik site (board.html, play.html, duzenle.html, config.js, css/, js/, sorular/)
 apps-script/     Google Apps Script web uygulaması (Code.gs, appsscript.json)
 scripts/         dogrula.py, sunucu.py, yuk_testi.py (yalnızca standart kütüphane)
 tests/           pytest

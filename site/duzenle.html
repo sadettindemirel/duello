@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Düello — Soru düzenleyici</title>
+  <link rel="stylesheet" href="css/ortak.css">
+  <link rel="stylesheet" href="css/duzenle.css">
+</head>
+<body>
+  <header class="ust">
+    <div class="logo">Düello</div>
+    <div class="ust-baslik">Soru düzenleyici</div>
+    <a class="dugme ikincil kucuk" href="board.html">Tahtaya dön</a>
+  </header>
+
+  <p class="bildirim" id="bildirim" hidden></p>
+
+  <main>
+    <!-- Giriş -->
+    <section data-ekran="giris" class="giris">
+      <form id="giris-formu" class="kart" autocomplete="off">
+        <h1>Soru düzenleyici</h1>
+        <label for="anahtar">Öğretmen anahtarı</label>
+        <input class="alan" id="anahtar" type="password" placeholder="Tahtada kullandığınız anahtar" required>
+        <div class="dugmeler">
+          <button class="dugme" type="submit">Giriş</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Düzenleme -->
+    <section data-ekran="duzen" class="duzen" hidden>
+      <aside class="set-listesi">
+        <button class="dugme" type="button" id="yeni-set">+ Yeni set</button>
+        <ul id="setler"></ul>
+        <label class="dugme ikincil kucuk">JSON'dan içe aktar<input type="file" accept=".json,application/json" id="ice-aktar" hidden></label>
+      </aside>
+
+      <form id="set-formu" class="set-formu" novalidate>
+        <div class="set-bilgi">
+          <div class="alan-grubu genis">
+            <label for="baslik">Set başlığı</label>
+            <input class="alan" id="baslik" required placeholder="ör. 9A — Atom ve Periyodik Sistem">
+          </div>
+          <div class="alan-grubu">
+            <label for="kisa-ad">Kısa ad</label>
+            <input class="alan" id="kisa-ad" required pattern="[A-Za-z0-9][A-Za-z0-9._\-]*" placeholder="9a-atom"
+              title="Harf, rakam, - _ . (Türkçe karakter ve boşluk olmaz)">
+          </div>
+          <div class="alan-grubu dar">
+            <label for="varsayilan-sure">Süre (sn)</label>
+            <input class="alan" id="varsayilan-sure" type="number" min="1" value="20" required>
+          </div>
+        </div>
+        <p class="soluk ipucu">Görsel eklemek için resmi soru kartının üstüne sürükleyin, kopyalayıp kartın içinde
+          <kbd>Ctrl</kbd>+<kbd>V</kbd> yapın ya da bir link yapıştırın. Doğru şıkkı yuvarlağa tıklayarak seçin.</p>
+
+        <ol id="sorular" class="soru-kartlari"></ol>
+        <button class="dugme ikincil" type="button" id="soru-ekle">+ Soru ekle</button>
+
+        <ul class="hatalar" id="hatalar" hidden></ul>
+
+        <div class="kaydet-cubugu">
+          <button class="dugme" type="submit" id="kaydet">Kaydet</button>
+          <span class="soluk" id="kayit-durumu"></span>
+          <span class="bosluk"></span>
+          <button class="dugme ikincil kucuk" type="button" id="json-indir">JSON indir</button>
+          <button class="dugme ikincil kucuk tehlike" type="button" id="set-sil">Seti sil</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <template id="soru-sablonu">
+    <li class="soru-karti">
+      <div class="kart-ust">
+        <span class="soru-no"></span>
+        <span class="bosluk"></span>
+        <button type="button" class="ikon" data-is="yukari" title="Yukarı taşı">↑</button>
+        <button type="button" class="ikon" data-is="asagi" title="Aşağı taşı">↓</button>
+        <button type="button" class="ikon" data-is="kopyala" title="Kopyala">⧉</button>
+        <button type="button" class="ikon" data-is="sil" title="Sil">✕</button>
+      </div>
+      <textarea class="alan" data-alan="metin" rows="2" placeholder="Soru metni" required></textarea>
+      <div class="gorsel-alani">
+        <div class="onizleme" hidden>
+          <img alt="Soru görseli önizlemesi">
+          <p class="gorsel-hata" hidden>Görsel açılamadı. Link herkese açık mı?</p>
+        </div>
+        <div class="gorsel-satiri">
+          <input class="alan" data-alan="gorsel" type="url" placeholder="Görsel linki (isteğe bağlı)">
+          <label class="dugme ikincil kucuk">Resim yükle<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-alan="dosya" hidden></label>
+          <button type="button" class="ikon" data-is="gorsel-kaldir" title="Görseli kaldır" hidden>✕</button>
+        </div>
+      </div>
+      <div class="sik-izgara">
+        <div class="sik sik-a"><span class="sekil">▲</span><input class="alan" data-sik="0" placeholder="A şıkkı" required><label class="dogru-sec" title="Doğru cevap"><input type="radio" value="0" required><span>✓</span></label></div>
+        <div class="sik sik-b"><span class="sekil">◆</span><input class="alan" data-sik="1" placeholder="B şıkkı" required><label class="dogru-sec" title="Doğru cevap"><input type="radio" value="1"><span>✓</span></label></div>
+        <div class="sik sik-c"><span class="sekil">●</span><input class="alan" data-sik="2" placeholder="C şıkkı" required><label class="dogru-sec" title="Doğru cevap"><input type="radio" value="2"><span>✓</span></label></div>
+        <div class="sik sik-d"><span class="sekil">■</span><input class="alan" data-sik="3" placeholder="D şıkkı" required><label class="dogru-sec" title="Doğru cevap"><input type="radio" value="3"><span>✓</span></label></div>
+      </div>
+      <div class="kart-alt">
+        <label>Süre <input class="alan kucuk-alan" data-alan="sure" type="number" min="1" placeholder="varsayılan"> sn</label>
+        <label>Kazanım <input class="alan kucuk-alan" data-alan="kazanim" placeholder="ör. 9.2.1"></label>
+      </div>
+    </li>
+  </template>
+
+  <script src="config.js"></script>
+  <script src="js/ortak.js"></script>
+  <script src="js/duzenle.js"></script>
+</body>
+</html>

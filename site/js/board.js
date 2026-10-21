@@ -7,9 +7,11 @@
   const TOLERANS_MS = 1500; // sunucudaki tolerans kadar bekleyip soruyu kapat
   const LOBI_ARALIK_MS = 2000;
 
+  const Ses = window.DuelloSes;
+
   const durum = {
     anahtar: D.sakla.al("duello_anahtar", ""),
-    dosya: null,
+    dosya: null, // "sheet:<id>" ya da "dosya:<ad>.json"; eski kayıtlarda önek yok (dosya sayılır)
     set: null,
     oturum: null,
     soruNo: 0, // son başlatılan soru (1 tabanlı)
@@ -17,6 +19,7 @@
     katilimciSayisi: 0,
     gizli: !D.sakla.al("duello_puanlar_acik", false),
     oncekiEkran: "acilis",
+    gorseller: [], // önceden yüklenen görseller; tarayıcı önbellekte tutsun diye referansı saklanır
   };
   let lobiZamanlayici = null;
   let sayacZamanlayici = null;
@@ -35,6 +38,8 @@
     clearTimeout(bildir.z);
     bildir.z = setTimeout(() => (el.hidden = true), 6000);
   }
+
+  const hataYaz = (err) => bildir(err instanceof D.IstekHatasi ? D.hataMetni(err) : String(err.message || err));
 
   function el(etiket, sinif, metin) {
     const e = document.createElement(etiket);
@@ -119,34 +124,87 @@
 
   // ───────── açılış ─────────
 
+  /** Soru seti listesi: Sheet'teki setler (anahtar gerekir) + repodaki JSON dosyaları. */
   async function setleriYukle() {
     const secim = $("soru-seti");
-    const istenen = new URLSearchParams(location.search).get("set");
-    try {
-      const yanit = await fetch(`sorular/index.json?t=${Date.now()}`, { cache: "no-store" });
-      if (!yanit.ok) throw new Error(yanit.status);
-      const liste = await yanit.json();
-      secim.replaceChildren(
-        ...liste.map((s) => {
-          const o = el("option", "", `${s.baslik} (${s.soru_sayisi} soru) — ${s.id}`);
-          o.value = s.dosya;
-          return o;
-        }),
-      );
-      if (istenen) secim.value = istenen;
-    } catch (e) {
-      bildir("Soru listesi (sorular/index.json) yüklenemedi. Yerelde: python scripts/dogrula.py --index");
+    const istenen = new URLSearchParams(location.search).get("set") || secim.value;
+    const anahtar = $("anahtar").value.trim();
+    const [sheet, dosyalar] = await Promise.allSettled([
+      anahtar ? D.get("setler", { anahtar }) : Promise.resolve({ setler: [] }),
+      fetch(`sorular/index.json?t=${Date.now()}`, { cache: "no-store" }).then((y) => {
+        if (!y.ok) throw new Error(y.status);
+        return y.json();
+      }),
+    ]);
+    const grup = (etiket, ogeler) => {
+      const g = el("optgroup");
+      g.label = etiket;
+      g.append(...ogeler);
+      return g;
+    };
+    const secenek = (deger, metin) => {
+      const o = el("option", "", metin);
+      o.value = deger;
+      return o;
+    };
+    const gruplar = [];
+    if (sheet.status === "fulfilled" && sheet.value.setler.length) {
+      gruplar.push(grup("Soru düzenleyicideki setler", sheet.value.setler.map((s) =>
+        secenek(`sheet:${s.id}`, `${s.baslik} (${s.soru_sayisi} soru)`))));
     }
+    if (dosyalar.status === "fulfilled" && dosyalar.value.length) {
+      gruplar.push(grup("Repodaki dosyalar", dosyalar.value.map((s) =>
+        secenek(`dosya:${s.dosya}`, `${s.baslik} (${s.soru_sayisi} soru) — ${s.id}`))));
+    }
+    secim.replaceChildren(...gruplar);
+    if (istenen) {
+      const uyan = [istenen, `sheet:${istenen}`, `dosya:${istenen}`].find((d) => secim.querySelector(`option[value="${CSS.escape(d)}"]`));
+      if (uyan) secim.value = uyan;
+    }
+    if (sheet.status === "rejected" && sheet.reason.kod === "yetkisiz") bildir(D.hataMetni(sheet.reason));
+    if (!gruplar.length) bildir("Henüz soru seti yok. Soruları düzenle bağlantısından bir set oluşturun.");
   }
 
-  async function setiGetir(dosya) {
-    const yanit = await fetch(`sorular/${encodeURIComponent(dosya)}?t=${Date.now()}`, { cache: "no-store" });
-    if (!yanit.ok) throw new Error(`${dosya} yüklenemedi (HTTP ${yanit.status})`);
-    const set = await yanit.json();
+  async function setiGetir(kaynak) {
+    let set;
+    if (kaynak.startsWith("sheet:")) {
+      const r = await D.get("set", { anahtar: durum.anahtar, id: kaynak.slice(6) });
+      if (r.hatalar.length) {
+        throw new Error(`"${r.set.baslik}" setinde eksik var: ${r.hatalar.slice(0, 3).join(" · ")} — Soruları düzenle'den düzeltin.`);
+      }
+      set = r.set;
+    } else {
+      const dosya = kaynak.replace(/^dosya:/, "");
+      const yanit = await fetch(`sorular/${encodeURIComponent(dosya)}?t=${Date.now()}`, { cache: "no-store" });
+      if (!yanit.ok) throw new Error(`${dosya} yüklenemedi (HTTP ${yanit.status})`);
+      set = await yanit.json();
+    }
     set.sorular.forEach((s) => {
       s.sure = s.sure || set.varsayilan_sure;
+      s.gorsel = s.gorsel ? D.gorselAdresi(s.gorsel) : null;
     });
     return set;
+  }
+
+  /** Görselleri önceden indirir (soru açılınca beklemesin); açılmayan olursa öğretmene söyler. */
+  function gorselleriYukle(set) {
+    durum.gorseller = [];
+    const bekleyenler = set.sorular.map((s, i) => {
+      if (!s.gorsel) return null;
+      return new Promise((coz) => {
+        const img = new Image();
+        img.onload = () => coz(null);
+        img.onerror = () => coz(i + 1);
+        img.src = s.gorsel;
+        durum.gorseller.push(img);
+      });
+    });
+    Promise.all(bekleyenler).then((sonuclar) => {
+      const bozuk = sonuclar.filter(Boolean);
+      if (bozuk.length) {
+        bildir(`Şu soruların görseli açılamadı: ${bozuk.join(", ")}. Link herkese açık mı? (Soruları düzenle'den kontrol edin.)`);
+      }
+    });
   }
 
   function oturumKimligi(setId) {
@@ -165,8 +223,9 @@
     try {
       durum.set = await setiGetir(dosya);
     } catch (err) {
-      return bildir(String(err.message || err));
+      return hataYaz(err);
     }
+    gorselleriYukle(durum.set);
     durum.dosya = dosya;
     durum.oturum = oturumKimligi(durum.set.id);
     const r = await ogretmen("oturumBaslat", {
@@ -185,8 +244,9 @@
     try {
       durum.set = await setiGetir(kayit.dosya);
     } catch (err) {
-      return bildir(String(err.message || err));
+      return hataYaz(err);
     }
+    gorselleriYukle(durum.set);
     Object.assign(durum, { dosya: kayit.dosya, oturum: kayit.oturum, soruNo: kayit.soruNo });
     if (kayit.faz === "soru" || kayit.faz === "sonuc") {
       durum.faz = "soru";
@@ -281,6 +341,7 @@
     $("sure-doldu").hidden = true;
     ekran("soru");
     sayacBaslat(r.sure_sn);
+    Ses.soruMuzigi(r.sure_sn);
   }
 
   function sayacBaslat(sureSn) {
@@ -318,6 +379,7 @@
   // ───────── sonuç ─────────
 
   function sonucGoster(r) {
+    Ses.sonuc();
     const soru = durum.set.sorular[r.soru_no - 1];
     $("sonuc-metni").textContent = soru.metin;
     const sinif = (i) => (i === r.dogru ? "dogru-sik" : "soluk-sik");
@@ -367,6 +429,8 @@
       ...sirali.map((o) => siralamaSatiri(o.sira, o.ad, `${o.puan} · ${o.dogru_sayisi}/${r.soru_sayisi} doğru`)),
     );
     ekran("podyum");
+    Ses.kutlama();
+    setTimeout(() => Ses.konfeti(), 1600); // davul gürlemesi bitince
   }
 
   // ───────── dönem ─────────
@@ -419,6 +483,15 @@
     }
   }
 
+  function sesGuncelle() {
+    $("ses-dugme").textContent = Ses.kapaliMi() ? "🔇" : "🔊";
+  }
+
+  function sesDegistir() {
+    Ses.sesDegistir();
+    sesGuncelle();
+  }
+
   function tamEkran() {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
@@ -433,11 +506,15 @@
       tamEkran();
     } else if (e.key === "g" || e.key === "G" || e.key === "ğ") {
       gizleDegistir();
+    } else if (e.key === "s" || e.key === "S" || e.key === "ş") {
+      sesDegistir();
     }
   });
 
   $("ileri").addEventListener("click", ileri);
   $("tam-ekran").addEventListener("click", tamEkran);
+  $("ses-dugme").addEventListener("click", sesDegistir);
+  $("anahtar").addEventListener("change", setleriYukle);
   $("gizle-dugme").addEventListener("click", gizleDegistir);
   $("acilis-formu").addEventListener("submit", oturumAc);
   $("devam-dugme").addEventListener("click", devamEt);
@@ -451,6 +528,7 @@
   });
 
   $("anahtar").value = durum.anahtar;
+  sesGuncelle();
   if (!D.ayar.APPS_SCRIPT_URL) bildir(D.hataMetni({ kod: "ayar_yok" }));
   qrCiz();
   setleriYukle();

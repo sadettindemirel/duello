@@ -93,6 +93,13 @@ window.Duello = (() => {
     return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
   }
 
+  /** Google Drive paylaşım linkini <img>'de açılan adrese çevirir; diğer adresler olduğu gibi döner. */
+  function gorselAdresi(url) {
+    const s = String(url || "").trim();
+    const m = s.match(/^https:\/\/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^#]*&)?id=)([\w-]{20,})/);
+    return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w1600` : s;
+  }
+
   const HATA_METINLERI = {
     ayar_yok: "config.js içinde APPS_SCRIPT_URL ayarlanmamış.",
     ag: "Bağlantı kurulamadı. İnternetini kontrol et.",
@@ -109,8 +116,12 @@ window.Duello = (() => {
     katilmadi: "Yarışmaya katılmamışsın, sayfayı yenile.",
     kurulum_yapilmamis: "Sheet'te kurulum yapılmamış (kurulum fonksiyonunu çalıştırın).",
     gecersiz_soru: "Geçersiz soru numarası.",
+    gecersiz_set: "Sette eksik ya da hatalı alanlar var.",
+    set_var: "Bu kısa adla başka bir set var; kısa adı değiştirin.",
+    set_yok: "Soru seti bulunamadı (silinmiş olabilir).",
+    gecersiz_gorsel: "Görsel PNG, JPG, GIF ya da WEBP olmalı ve 5 MB'ı geçmemeli.",
   };
   const hataMetni = (e) => HATA_METINLERI[e && e.kod] || `Beklenmeyen hata: ${(e && e.kod) || e}`;
 
-  return { ayar, get, post, bekle, sakla, ekranGoster, yeniId, hataMetni, IstekHatasi, HARFLER: ["A", "B", "C", "D"] };
+  return { ayar, get, post, bekle, sakla, ekranGoster, yeniId, gorselAdresi, hataMetni, IstekHatasi, HARFLER: ["A", "B", "C", "D"] };
 })();

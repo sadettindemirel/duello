@@ -15,6 +15,7 @@
     <div class="ust-sag">
       <span class="rozet" id="ust-katilimci" hidden></span>
       <button type="button" class="dugme ikincil kucuk" id="gizle-dugme" hidden>Puanları göster (G)</button>
+      <button type="button" class="dugme ikincil kucuk" id="ses-dugme" title="Sesi aç/kapat (S)">🔊</button>
       <button type="button" class="dugme ikincil kucuk" id="tam-ekran" title="Tam ekran (F)">⛶</button>
     </div>
   </header>
@@ -33,6 +34,7 @@
         <div class="dugmeler">
           <button class="dugme" type="submit">Oturumu aç</button>
           <button class="dugme ikincil" type="button" id="donem-ac">Dönem tablosu</button>
+          <a class="dugme ikincil" href="duzenle.html">Soruları düzenle ✎</a>
         </div>
         <div class="devam" id="devam" hidden>
           <span id="devam-metin"></span>
@@ -117,13 +119,14 @@
   </main>
 
   <footer class="alt">
-    <span class="soluk"><kbd>Boşluk</kbd> sonraki adım · <kbd>F</kbd> tam ekran · <kbd>G</kbd> puanları gizle/göster</span>
+    <span class="soluk"><kbd>Boşluk</kbd> sonraki adım · <kbd>F</kbd> tam ekran · <kbd>G</kbd> puanları gizle/göster · <kbd>S</kbd> ses</span>
     <button type="button" class="dugme" id="ileri" hidden>İleri ▶</button>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
   <script src="config.js"></script>
   <script src="js/ortak.js"></script>
+  <script src="js/ses.js"></script>
   <script src="js/board.js"></script>
 </body>
 </html>

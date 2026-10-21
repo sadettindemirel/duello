@@ -10,6 +10,9 @@
  *
  * Soru sırasında gelen cevaplar önce önbellekteki bir tampona yazılır, soru bitince tek seferde
  * `cevaplar` sekmesine aktarılır. Kilitli bölüm böylece kısa kalır ve 50 eşzamanlı cevap sıraya girmez.
+ *
+ * Soru setleri `setler` (başlık, varsayılan süre) ve `sorular` (her satır bir soru) sekmelerinde durur.
+ * Soru düzenleyici (site/duzenle.html) bunları yazar; öğretmen Sheet'e doğrudan da yazabilir.
  */
 
 const SEKMELER = {
@@ -19,22 +22,35 @@ const SEKMELER = {
   anahtar: ['oturum', 'soru_no', 'dogru', 'sure_sn'],
   puanlar: ['oturum', 'oyuncu_id', 'ad', 'okul_no', 'dogru_sayisi', 'puan', 'sira'],
   donem: ['oyuncu_id', 'son_ad', 'okul_no', 'katildigi_ders', 'toplam_puan', 'dogru_orani'],
+  setler: ['id', 'baslik', 'varsayilan_sure', 'guncelleme'],
+  sorular: ['set', 'soru', 'gorsel', 'A', 'B', 'C', 'D', 'dogru', 'sure', 'kazanim'],
 };
-// Sheets'in sayıya/tarihe çevirmemesi gereken sütunlar (ör. okul no "0123").
-const METIN_SUTUNLARI = ['oturum', 'oyuncu_id', 'ad', 'son_ad', 'okul_no'];
+// Sheets'in sayıya/tarihe çevirmemesi gereken sütunlar (ör. okul no "0123", şık "1/2", kazanım "9.2").
+const METIN_SUTUNLARI = ['oturum', 'oyuncu_id', 'ad', 'son_ad', 'okul_no', 'id', 'baslik',
+  'set', 'soru', 'gorsel', 'A', 'B', 'C', 'D', 'dogru', 'kazanim'];
 
-const SURUM = '2026-10-21c'; // durum yanıtında döner; hangi dağıtımın yayında olduğunu gösterir
+const SURUM = '2026-10-21d'; // durum yanıtında döner; hangi dağıtımın yayında olduğunu gösterir
 const HARFLER = ['A', 'B', 'C', 'D'];
 const TOLERANS_MS = 1500;
 const ONBELLEK_SN = 21600; // CacheService üst sınırı (6 saat)
 const KILIT_BEKLEME_MS = 20000;
 const AD_UZUNLUK = 20;
+const SET_ID_DESENI = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const VARSAYILAN_SURE = 20;
+const GORSEL_KLASOR_ADI = 'Düello görselleri';
+const GORSEL_TURLERI = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const GORSEL_EN_BUYUK = 5 * 1024 * 1024;
 const YASAK_KELIMELER = [
   'amk', 'aq', 'mk', 'oç', 'oc', 'orospu', 'piç', 'pic', 'sik', 'sikik', 'siktir', 'yarak', 'yarrak',
   'göt', 'got', 'götveren', 'ibne', 'pezevenk', 'kahpe', 'kaltak', 'gavat', 'puşt', 'pust', 'fuck', 'shit',
 ];
 
-class Red extends Error {}
+class Red extends Error {
+  constructor(kod, detay) {
+    super(kod);
+    this.detay = detay;
+  }
+}
 
 // ───────────────────────────── Kurulum ─────────────────────────────
 
@@ -51,6 +67,10 @@ function kurulum() {
       }
     });
   });
+  const sorular = ss.getSheetByName('sorular');
+  sorular.getRange(2, SEKMELER.sorular.indexOf('dogru') + 1, sorular.getMaxRows() - 1, 1).setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(HARFLER).setAllowInvalid(false).build());
+  gorselKlasoru(); // Drive iznini kurulumda iste; görsel yükleme ilk derste izin beklemesin.
   const durum = ss.getSheetByName('durum');
   if (durum.getLastRow() < 2) durum.getRange(2, 1, 1, 5).setValues([['', 0, 0, 0, 'bekle']]);
 
@@ -100,6 +120,8 @@ const GET_ISLERI = {
   durum: { fn: durumSorgu },
   lobi: { fn: lobi, ogretmen: true },
   donem: { fn: donemOku, ogretmen: true },
+  setler: { fn: setleriOku, ogretmen: true },
+  set: { fn: setOku, ogretmen: true },
 };
 const POST_ISLERI = {
   oturumBaslat: { fn: oturumBaslat, ogretmen: true },
@@ -107,6 +129,9 @@ const POST_ISLERI = {
   soruBitir: { fn: soruBitir, ogretmen: true },
   oturumBitir: { fn: oturumBitir, ogretmen: true },
   cikar: { fn: cikar, ogretmen: true },
+  setKaydet: { fn: setKaydet, ogretmen: true },
+  setSil: { fn: setSil, ogretmen: true },
+  gorselYukle: { fn: gorselYukle, ogretmen: true },
   katil: { fn: katil },
   cevap: { fn: cevap },
 };
@@ -132,7 +157,7 @@ function isle(isler, p) {
     if (is.ogretmen && !ogretmenMi(p.anahtar)) throw new Red('yetkisiz');
     return cikti(Object.assign({ ok: true }, is.fn(p)));
   } catch (err) {
-    if (err instanceof Red) return cikti({ ok: false, hata: err.message });
+    if (err instanceof Red) return cikti({ ok: false, hata: err.message, detay: err.detay });
     console.error(err);
     return cikti({ ok: false, hata: 'sunucu', detay: String(err) });
   }
@@ -208,21 +233,25 @@ function satirEkle(s, satirlar) {
   s.getRange(ilk, 1, satirlar.length, satirlar[0].length).setValues(satirlar);
 }
 
-/** `oturum` sütunu verilen değere eşit satırlar: [{satir, degerler}]. Oturumun ilk satırından itibaren okur. */
-function oturumSatirlari(sayfaAdi, oturum) {
+/** `sutunAdi` sütunu `deger`e eşit satırlar: [{satir, degerler}]. Değerin ilk geçtiği satırdan itibaren okur. */
+function esitSatirlar(sayfaAdi, sutunAdi, deger) {
   const s = sayfa(sayfaAdi);
-  const sutun = SEKMELER[sayfaAdi].indexOf('oturum') + 1;
+  const sutun = SEKMELER[sayfaAdi].indexOf(sutunAdi) + 1;
   const son = s.getLastRow();
-  if (!oturum || son < 2) return [];
-  const bulunan = s.getRange(2, sutun, son - 1, 1).createTextFinder(oturum).matchEntireCell(true).findNext();
+  if (!deger || son < 2) return [];
+  const bulunan = s.getRange(2, sutun, son - 1, 1).createTextFinder(deger).matchEntireCell(true).findNext();
   if (!bulunan) return [];
   const ilk = bulunan.getRow();
   const veri = s.getRange(ilk, 1, son - ilk + 1, SEKMELER[sayfaAdi].length).getValues();
   const sonuc = [];
   veri.forEach((degerler, i) => {
-    if (String(degerler[sutun - 1]) === oturum) sonuc.push({ satir: ilk + i, degerler: degerler });
+    if (String(degerler[sutun - 1]) === deger) sonuc.push({ satir: ilk + i, degerler: degerler });
   });
   return sonuc;
+}
+
+function oturumSatirlari(sayfaAdi, oturum) {
+  return esitSatirlar(sayfaAdi, 'oturum', oturum);
 }
 
 /** Verilen satır numaralarını (ardışık blokları bir arada) siler. */
@@ -656,4 +685,174 @@ function donemOku() {
       dogru_orani: Number(r[5]) || 0,
     })).sort((a, b) => b.toplam_puan - a.toplam_puan),
   };
+}
+
+// ───────────────────────────── Soru setleri ─────────────────────────────
+
+function doluMu(v) {
+  return v !== null && v !== undefined && String(v).trim() !== '';
+}
+
+/** Set nesnesini (site/sorular/*.json biçimi) kontrol eder; öğretmene gösterilecek hata satırlarını döner. */
+function setHatalari(set) {
+  if (!set || typeof set !== 'object') return ['Set okunamadı.'];
+  const h = [];
+  if (!SET_ID_DESENI.test(String(set.id || ''))) {
+    h.push("Kısa ad yalnızca harf, rakam, '-', '_' ve '.' içerebilir (Türkçe karakter ve boşluk olmaz).");
+  }
+  if (!doluMu(set.baslik)) h.push('Başlık boş olamaz.');
+  const varsayilan = set.varsayilan_sure;
+  if (doluMu(varsayilan) && !(Number(varsayilan) > 0)) h.push("Varsayılan süre 0'dan büyük olmalı.");
+  if (!Array.isArray(set.sorular) || !set.sorular.length) {
+    h.push('En az bir soru olmalı.');
+    return h;
+  }
+  set.sorular.forEach((s, i) => {
+    const yer = 'Soru ' + (i + 1) + ': ';
+    if (!s || typeof s !== 'object') return h.push(yer + 'okunamadı.');
+    if (!doluMu(s.metin)) h.push(yer + 'soru metni boş.');
+    if (!Array.isArray(s.siklar) || s.siklar.length !== HARFLER.length || !s.siklar.every(doluMu)) {
+      h.push(yer + 'dört şıkkın hepsi dolu olmalı.');
+    }
+    if (!(s.dogru >= 0 && s.dogru < HARFLER.length && s.dogru === Math.floor(s.dogru))) {
+      h.push(yer + 'doğru cevap seçilmemiş (A, B, C ya da D).');
+    }
+    if (doluMu(s.sure) && !(Number(s.sure) > 0)) h.push(yer + "süre 0'dan büyük olmalı.");
+    else if (!doluMu(s.sure) && !(Number(varsayilan) > 0)) h.push(yer + 'süre yok, varsayılan süre de yok.');
+  });
+  return h;
+}
+
+/** `setler` sekmesindeki satırlar: {id: {baslik, varsayilan_sure, guncelleme}}. */
+function setBilgileri() {
+  const s = sayfa('setler');
+  const bilgiler = {};
+  if (s.getLastRow() < 2) return bilgiler;
+  s.getRange(2, 1, s.getLastRow() - 1, SEKMELER.setler.length).getValues().forEach((r) => {
+    const id = String(r[0]).trim();
+    if (id) bilgiler[id] = { baslik: String(r[1]), varsayilan_sure: Number(r[2]) || 0, guncelleme: r[3] };
+  });
+  return bilgiler;
+}
+
+/** Öğretmenin setleri. Yalnızca `sorular` sekmesine yazılmış (setler'de satırı olmayan) setler de listelenir. */
+function setleriOku() {
+  const bilgiler = setBilgileri();
+  const sayilar = {};
+  const s = sayfa('sorular');
+  if (s.getLastRow() >= 2) {
+    s.getRange(2, 1, s.getLastRow() - 1, 1).getValues().forEach((r) => {
+      const id = String(r[0]).trim();
+      if (id) sayilar[id] = (sayilar[id] || 0) + 1;
+    });
+  }
+  const idler = Object.keys(Object.assign({}, bilgiler, sayilar));
+  return {
+    setler: idler.map((id) => {
+      const b = bilgiler[id] || {};
+      return {
+        id: id,
+        baslik: b.baslik || id,
+        soru_sayisi: sayilar[id] || 0,
+        guncelleme: b.guncelleme instanceof Date ? b.guncelleme.getTime() : 0,
+      };
+    }).sort((a, b) => b.guncelleme - a.guncelleme || a.baslik.localeCompare(b.baslik, 'tr')),
+  };
+}
+
+function setOku(p) {
+  const id = String(p.id || '').trim();
+  const bilgi = setBilgileri()[id];
+  const satirlar = esitSatirlar('sorular', 'set', id);
+  if (!bilgi && !satirlar.length) throw new Red('set_yok');
+  const set = {
+    id: id,
+    baslik: (bilgi && bilgi.baslik) || id,
+    varsayilan_sure: (bilgi && bilgi.varsayilan_sure) || VARSAYILAN_SURE,
+    sorular: satirlar.map((r) => {
+      const v = r.degerler;
+      const soru = {
+        metin: String(v[1]).trim(),
+        gorsel: String(v[2]).trim() || null,
+        siklar: [v[3], v[4], v[5], v[6]].map((x) => String(x).trim()),
+        dogru: HARFLER.indexOf(String(v[7]).trim().toUpperCase()),
+      };
+      if (doluMu(v[8])) soru.sure = Number(v[8]);
+      if (doluMu(v[9])) soru.kazanim = String(v[9]).trim();
+      return soru;
+    }),
+  };
+  return { set: set, hatalar: setHatalari(set) };
+}
+
+/** Seti kaydeder; `eski_id` verilirse o setin yerine geçer (kısa ad değiştirme). */
+function setKaydet(p) {
+  const set = p.set;
+  const eskiId = String(p.eski_id || '').trim();
+  const hatalar = setHatalari(set);
+  if (hatalar.length) throw new Red('gecersiz_set', hatalar);
+  const id = String(set.id).trim();
+  return kilitle(() => {
+    if (id !== eskiId) {
+      const varMi = setBilgileri()[id] || esitSatirlar('sorular', 'set', id).length;
+      if (varMi) throw new Red('set_var');
+    }
+    setSatirlariniSil(eskiId);
+    setSatirlariniSil(id);
+    satirEkle(sayfa('setler'), [[id, String(set.baslik).trim(), Number(set.varsayilan_sure) || '', new Date()]]);
+    satirEkle(sayfa('sorular'), set.sorular.map((s) => [
+      id,
+      String(s.metin).trim(),
+      doluMu(s.gorsel) ? String(s.gorsel).trim() : '',
+    ].concat(s.siklar.map((x) => String(x).trim()), [
+      HARFLER[s.dogru],
+      doluMu(s.sure) ? Number(s.sure) : '',
+      doluMu(s.kazanim) ? String(s.kazanim).trim() : '',
+    ])));
+    return { id: id };
+  });
+}
+
+function setSil(p) {
+  const id = String(p.id || '').trim();
+  if (!id) throw new Red('gecersiz_istek');
+  return kilitle(() => {
+    setSatirlariniSil(id);
+    return {};
+  });
+}
+
+/** Setin `setler` ve `sorular` satırlarını siler. Kilit içinde çağrılır. */
+function setSatirlariniSil(id) {
+  if (!id) return;
+  satirlariSil(sayfa('setler'), esitSatirlar('setler', 'id', id).map((r) => r.satir));
+  satirlariSil(sayfa('sorular'), esitSatirlar('sorular', 'set', id).map((r) => r.satir));
+}
+
+/** Görseli Drive'daki "Düello görselleri" klasörüne kaydeder, bağlantıya sahip herkese açar. */
+function gorselYukle(p) {
+  const tur = String(p.tur || '');
+  if (GORSEL_TURLERI.indexOf(tur) < 0) throw new Red('gecersiz_gorsel');
+  const bayt = Utilities.base64Decode(String(p.veri || ''));
+  if (!bayt.length || bayt.length > GORSEL_EN_BUYUK) throw new Red('gecersiz_gorsel');
+  const ad = String(p.ad || 'gorsel').slice(0, 100);
+  const dosya = gorselKlasoru().createFile(Utilities.newBlob(bayt, tur, ad));
+  dosya.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return { url: 'https://drive.google.com/file/d/' + dosya.getId() + '/view' };
+}
+
+function gorselKlasoru() {
+  const ozellikler = PropertiesService.getScriptProperties();
+  const id = ozellikler.getProperty('GORSEL_KLASORU');
+  if (id) {
+    try {
+      const klasor = DriveApp.getFolderById(id);
+      if (!klasor.isTrashed()) return klasor;
+    } catch (e) {
+      // Klasör silinmiş; yenisi açılır.
+    }
+  }
+  const klasor = DriveApp.createFolder(GORSEL_KLASOR_ADI);
+  ozellikler.setProperty('GORSEL_KLASORU', klasor.getId());
+  return klasor;
 }
