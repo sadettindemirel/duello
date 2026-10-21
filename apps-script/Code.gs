@@ -23,6 +23,7 @@ const SEKMELER = {
 // Sheets'in sayıya/tarihe çevirmemesi gereken sütunlar (ör. okul no "0123").
 const METIN_SUTUNLARI = ['oturum', 'oyuncu_id', 'ad', 'son_ad', 'okul_no'];
 
+const SURUM = '2026-10-21c'; // durum yanıtında döner; hangi dağıtımın yayında olduğunu gösterir
 const HARFLER = ['A', 'B', 'C', 'D'];
 const TOLERANS_MS = 1500;
 const ONBELLEK_SN = 21600; // CacheService üst sınırı (6 saat)
@@ -146,13 +147,14 @@ function ogretmenMi(anahtar) {
   return !!dogru && String(anahtar || '') === dogru;
 }
 
-function kilitle(fn) {
+/** `fn`'i betik kilidi içinde çalıştırır. Yalnızca önbelleğe yazan işler `sheetYazar = false` verir. */
+function kilitle(fn, sheetYazar = true) {
   const kilit = LockService.getScriptLock();
   if (!kilit.tryLock(KILIT_BEKLEME_MS)) throw new Red('mesgul');
   try {
     return fn();
   } finally {
-    SpreadsheetApp.flush();
+    if (sheetYazar) SpreadsheetApp.flush();
     kilit.releaseLock();
   }
 }
@@ -176,6 +178,25 @@ function jsonOku(anahtar) {
 
 function jsonYaz(anahtar, deger) {
   onbellek().put(anahtar, JSON.stringify(deger), ONBELLEK_SN);
+}
+
+/** Birden çok anahtarı tek önbellek çağrısıyla okur: {anahtar: çözülmüş değer | undefined}. */
+function jsonOkuHepsi(anahtarlar) {
+  const ham = onbellek().getAll(anahtarlar);
+  const sonuc = {};
+  anahtarlar.forEach((k) => {
+    if (ham[k]) sonuc[k] = JSON.parse(ham[k]);
+  });
+  return sonuc;
+}
+
+/** Birden çok değeri tek önbellek çağrısıyla yazar. */
+function jsonYazHepsi(degerler) {
+  const ham = {};
+  Object.keys(degerler).forEach((k) => {
+    ham[k] = JSON.stringify(degerler[k]);
+  });
+  onbellek().putAll(ham, ONBELLEK_SN);
 }
 
 /** Sayfanın sonuna satırları tek seferde ekler. */
@@ -323,7 +344,7 @@ function tamponuBosalt(oturum, soruNo) {
 
 function durumSorgu(p) {
   const d = durumOku();
-  const yanit = { oturum: d.oturum, soru_no: d.soru_no, faz: d.faz, sure_sn: d.sure_sn, kalan_ms: 0 };
+  const yanit = { oturum: d.oturum, soru_no: d.soru_no, faz: d.faz, sure_sn: d.sure_sn, kalan_ms: 0, surum: SURUM };
   if (d.faz === 'soru') yanit.kalan_ms = Math.max(0, d.baslangic_ms + d.sure_sn * 1000 - Date.now());
   const id = p.oyuncu_id;
   if (id && d.oturum) {
@@ -349,7 +370,13 @@ function katil(p) {
   if (d.faz === 'bitti') throw new Red('oturum_bitti');
 
   return kilitle(() => {
-    const oyuncular = oyunculariOku(oturum);
+    // Kilit içindeki her önbellek çağrısı bir ağ gidiş-dönüşüdür; okuma ve yazma birer çağrıya indirildi.
+    const oyuncularK = 'oyuncular:' + oturum;
+    const tamponK = katilTamponAnahtari(oturum);
+    const cikarK = 'cikar:' + oturum + ':' + id;
+    const okunan = jsonOkuHepsi([oyuncularK, tamponK, cikarK]);
+    const oyuncular = okunan[oyuncularK] || oyunculariOku(oturum);
+    const tampon = okunan[tamponK] || [];
     if (!okulNo && oyuncular[id]) okulNo = oyuncular[id].okul_no;
     const digerAdlar = {};
     Object.keys(oyuncular).forEach((digerId) => {
@@ -359,24 +386,27 @@ function katil(p) {
     for (let n = 2; digerAdlar[sonAd.toLocaleLowerCase('tr')]; n++) sonAd = ad + ' ' + n;
 
     // Yeni katılımcı önce önbellekteki tampona girer; Sheet'e lobi / soru başlangıcında toplu yazılır.
-    const tamponK = katilTamponAnahtari(oturum);
-    const tampon = jsonOku(tamponK) || [];
     const tampondaki = tampon.filter((r) => r[1] === id)[0];
     if (tampondaki) {
       tampondaki[2] = sonAd;
       tampondaki[3] = okulNo;
     } else if (oyuncular[id]) {
       const mevcut = oturumSatirlari('katilimcilar', oturum).filter((r) => String(r.degerler[1]) === id)[0];
-      if (mevcut) sayfa('katilimcilar').getRange(mevcut.satir, 3, 1, 2).setValues([[sonAd, okulNo]]);
+      if (mevcut) {
+        sayfa('katilimcilar').getRange(mevcut.satir, 3, 1, 2).setValues([[sonAd, okulNo]]);
+        SpreadsheetApp.flush();
+      }
     } else {
       tampon.push([oturum, id, sonAd, okulNo, Date.now()]);
     }
-    jsonYaz(tamponK, tampon);
     oyuncular[id] = { ad: sonAd, okul_no: okulNo };
-    jsonYaz('oyuncular:' + oturum, oyuncular);
-    onbellek().remove('cikar:' + oturum + ':' + id);
+    const yazilacak = {};
+    yazilacak[tamponK] = tampon;
+    yazilacak[oyuncularK] = oyuncular;
+    jsonYazHepsi(yazilacak);
+    if (okunan[cikarK]) onbellek().remove(cikarK);
     return { ad: sonAd };
-  });
+  }, false);
 }
 
 function cevap(p) {
@@ -388,29 +418,33 @@ function cevap(p) {
   if (!id || !(sik >= 0 && sik < HARFLER.length && sik === Math.floor(sik))) throw new Red('gecersiz_istek');
 
   return kilitle(() => {
-    const d = aktifOturum(oturum);
+    const cevapK = cevapAnahtari(oturum, soruNo, id);
+    const tamponK = tamponAnahtari(oturum, soruNo);
+    const oyuncularK = 'oyuncular:' + oturum;
+    const anahtarK = 'anahtar:' + oturum;
+    const okunan = jsonOkuHepsi(['durum', cevapK, tamponK, oyuncularK, anahtarK]);
+
+    const d = okunan.durum || durumOku();
+    if (d.oturum !== oturum) throw new Red('oturum_yok');
     if (d.faz !== 'soru' || d.soru_no !== soruNo) throw new Red('soru_aktif_degil');
     const sureMs = simdi - d.baslangic_ms;
     if (sureMs > d.sure_sn * 1000 + TOLERANS_MS) throw new Red('sure_doldu');
-
-    const cevapK = cevapAnahtari(oturum, soruNo, id);
-    if (onbellek().get(cevapK)) throw new Red('zaten_cevaplandi');
-    const oyuncu = oyunculariOku(oturum)[id];
+    if (okunan[cevapK]) throw new Red('zaten_cevaplandi');
+    const oyuncu = (okunan[oyuncularK] || oyunculariOku(oturum))[id];
     if (!oyuncu) throw new Red('katilmadi');
 
-    const dogru = anahtarOku(oturum)[soruNo - 1].dogru;
+    const dogru = (okunan[anahtarK] || anahtarOku(oturum))[soruNo - 1].dogru;
     const dogruMu = sik === dogru;
     const puan = dogruMu ? puanHesapla(sureMs, d.sure_sn) : 0;
 
-    const tamponK = tamponAnahtari(oturum, soruNo);
-    const tampon = jsonOku(tamponK) || [];
+    const tampon = okunan[tamponK] || [];
     tampon.push([simdi, oturum, id, oyuncu.ad, soruNo, HARFLER[sik], sureMs, dogruMu, puan]);
     const yazilacak = {};
-    yazilacak[tamponK] = JSON.stringify(tampon);
-    yazilacak[cevapK] = JSON.stringify({ sik: sik, dogru_mu: dogruMu, puan: puan });
-    onbellek().putAll(yazilacak, ONBELLEK_SN);
+    yazilacak[tamponK] = tampon;
+    yazilacak[cevapK] = { sik: sik, dogru_mu: dogruMu, puan: puan };
+    jsonYazHepsi(yazilacak);
     return {};
-  });
+  }, false);
 }
 
 // ───────────────────────────── Öğretmen ─────────────────────────────
