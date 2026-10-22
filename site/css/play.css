@@ -63,6 +63,12 @@ main > section {
   gap: 8px;
 }
 
+.dil {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0 0.6em;
+}
+
 .zar {
   font-size: 1.4rem;
   padding: 0 0.7em;

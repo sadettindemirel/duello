@@ -194,8 +194,20 @@
     b.addEventListener("click", () => cevapla(Number(b.dataset.sik)));
   });
 
+  // Rastgele ad dili (TR/EN); cihazda hatırlanır.
+  let adDili = "tr";
+  try { adDili = localStorage.getItem("duello_ad_dili") === "en" ? "en" : "tr"; } catch (_) {}
+  $("dil").textContent = adDili.toUpperCase();
+
+  $("dil").addEventListener("click", () => {
+    adDili = adDili === "tr" ? "en" : "tr";
+    $("dil").textContent = adDili.toUpperCase();
+    try { localStorage.setItem("duello_ad_dili", adDili); } catch (_) {}
+    $("ad").value = window.rastgeleAd(adDili);
+  });
+
   $("zar").addEventListener("click", () => {
-    $("ad").value = window.rastgeleAd();
+    $("ad").value = window.rastgeleAd(adDili);
   });
 
   $("degistir").addEventListener("click", () => girisAc());
