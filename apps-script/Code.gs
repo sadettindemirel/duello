@@ -30,7 +30,7 @@ const SEKMELER = {
 const METIN_SUTUNLARI = ['oturum', 'oyuncu_id', 'ad', 'son_ad', 'okul_no', 'id', 'baslik',
   'set', 'soru', 'gorsel', 'A', 'B', 'C', 'D', 'dogru', 'kazanim'];
 
-const SURUM = '2026-10-21e'; // durum yanıtında döner; hangi dağıtımın yayında olduğunu gösterir
+const SURUM = '2026-10-22a'; // durum yanıtında döner; hangi dağıtımın yayında olduğunu gösterir
 const HARFLER = ['A', 'B', 'C', 'D'];
 const TOLERANS_MS = 1500;
 // Puan, telefonun soruyu ilk gördüğü andan sayılır (2 sn'lik sorgu aralığına denk gelen kaybetmesin);
@@ -44,6 +44,8 @@ const VARSAYILAN_SURE = 20;
 const GORSEL_KLASOR_ADI = 'Düello görselleri';
 const GORSEL_TURLERI = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const GORSEL_EN_BUYUK = 5 * 1024 * 1024;
+const TABLO_EN_COK_SATIR = 1000;
+const TABLO_EN_COK_SUTUN = 26;
 const YASAK_KELIMELER = [
   'amk', 'aq', 'mk', 'oç', 'oc', 'orospu', 'piç', 'pic', 'sik', 'sikik', 'siktir', 'yarak', 'yarrak',
   'göt', 'got', 'götveren', 'ibne', 'pezevenk', 'kahpe', 'kaltak', 'gavat', 'puşt', 'pust', 'fuck', 'shit',
@@ -124,6 +126,7 @@ const GET_ISLERI = {
   donem: { fn: donemOku, ogretmen: true },
   setler: { fn: setleriOku, ogretmen: true },
   set: { fn: setOku, ogretmen: true },
+  tabloOku: { fn: tabloOku, ogretmen: true },
 };
 const POST_ISLERI = {
   oturumBaslat: { fn: oturumBaslat, ogretmen: true },
@@ -899,4 +902,29 @@ function gorselKlasoru() {
   const klasor = DriveApp.createFolder(GORSEL_KLASOR_ADI);
   ozellikler.setProperty('GORSEL_KLASORU', klasor.getId());
   return klasor;
+}
+
+/**
+ * Öğretmenin verdiği Google E-Tablolar linkindeki sayfayı (linkte gid varsa o sekme, yoksa ilki) görünen
+ * metinleriyle döner. Tablo, web uygulamasını dağıtan öğretmenin hesabıyla açılır; paylaşılmış olması gerekmez.
+ */
+function tabloOku(p) {
+  const url = String(p.url || '');
+  const id = (url.match(/\/spreadsheets\/d\/([\w-]{20,})/) || [])[1];
+  if (!id) throw new Red('gecersiz_link');
+  let tablo;
+  try {
+    tablo = SpreadsheetApp.openById(id);
+  } catch (e) {
+    throw new Red('tablo_acilamadi');
+  }
+  const gid = (url.match(/[#&?]gid=(\d+)/) || [])[1];
+  const sekmeler = tablo.getSheets();
+  const sekme = (gid && sekmeler.filter((s) => String(s.getSheetId()) === gid)[0]) || sekmeler[0];
+  const satir = Math.min(sekme.getLastRow(), TABLO_EN_COK_SATIR);
+  const sutun = Math.min(sekme.getLastColumn(), TABLO_EN_COK_SUTUN);
+  return {
+    ad: sekmeler.length > 1 ? tablo.getName() + ' — ' + sekme.getName() : tablo.getName(),
+    satirlar: satir && sutun ? sekme.getRange(1, 1, satir, sutun).getDisplayValues() : [],
+  };
 }

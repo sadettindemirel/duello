@@ -26,6 +26,12 @@ Her derste **aynı telefon ve tarayıcıyı** kullanırsan puanların dönem boy
    İnternetteki bir resmin linkini de yapıştırabilirsiniz (Drive linkinde dosya "bağlantıya sahip herkes"e açık olmalı).
 4. **Kaydet** (`Ctrl`+`S`). Set tahtadaki listede hemen görünür; beklemeye gerek yok.
 
+**Hazır soruları toplu eklemek:** Düzenleyicide soldaki **İçe aktar** bölümünden bir Excel/CSV dosyası seçin ya da
+bir Google E-Tablolar linki yapıştırıp **Getir**'e basın. İlk satır başlık olmalı: **Soru, A, B, C, D, Doğru**
+(isteğe bağlı **Süre, Görsel, Kazanım**). Doğru cevap A–D, 1–4 ya da doğru şıkkın kendisi olabilir.
+Sorular yeni bir set olarak forma gelir, eksikler listelenir; kontrol edip **Kaydet**'e basın.
+**Örnek dosyayı indir** bağlantısı doldurmaya hazır bir şablon verir.
+
 Setler Google Sheet'inizin `setler` ve `sorular` sekmelerinde durur; isterseniz oradan da düzenleyebilirsiniz.
 Eski yöntem de çalışır: `site/sorular/` klasörüne JSON dosyası ekleyip push etmek
 (biçim için [ornek.json](site/sorular/ornek.json); düzenleyicideki **JSON indir** bu biçimde verir).

@@ -35,7 +35,22 @@
       <aside class="set-listesi">
         <button class="dugme" type="button" id="yeni-set">+ Yeni set</button>
         <ul id="setler"></ul>
-        <label class="dugme ikincil kucuk">JSON'dan içe aktar<input type="file" accept=".json,application/json" id="ice-aktar" hidden></label>
+        <div class="ice-aktar">
+          <h2>İçe aktar</h2>
+          <label class="dugme ikincil kucuk">Dosyadan (Excel, CSV)<input type="file" accept=".xlsx,.xls,.ods,.csv,.tsv,.txt,.json" id="ice-aktar" hidden></label>
+          <form id="link-formu" class="link-formu" autocomplete="off">
+            <input class="alan" id="tablo-linki" type="url" placeholder="Google E-Tablolar linki" required>
+            <button class="dugme ikincil kucuk" type="submit" id="link-getir">Getir</button>
+          </form>
+          <details class="bicim">
+            <summary>Tablo nasıl olmalı?</summary>
+            <p>İlk satır başlık: <b>Soru</b>, <b>A</b>, <b>B</b>, <b>C</b>, <b>D</b>, <b>Doğru</b>; isteğe bağlı
+              <b>Süre</b>, <b>Görsel</b> (link), <b>Kazanım</b>. Sütun sırası önemli değil.</p>
+            <p>Doğru: A–D harfi, 1–4 ya da doğru şıkkın kendisi.</p>
+            <p>Her satır bir soru. Excel'de yalnızca ilk sayfa okunur; linkte açık olan sekme alınır.</p>
+            <button type="button" class="baglanti" id="ornek-indir">Örnek dosyayı indir</button>
+          </details>
+        </div>
       </aside>
 
       <form id="set-formu" class="set-formu" novalidate>
@@ -110,6 +125,7 @@
 
   <script src="config.js"></script>
   <script src="js/ortak.js"></script>
+  <script src="js/tablo.js"></script>
   <script src="js/duzenle.js"></script>
 </body>
 </html>

@@ -140,6 +140,57 @@ kbd {
   font-weight: 700;
 }
 
+.ice-aktar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  padding-top: 0.8em;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ice-aktar h2 {
+  margin: 0;
+  font-size: 1em;
+}
+
+.link-formu {
+  display: flex;
+  gap: 0.4em;
+}
+
+.link-formu .alan {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4em 0.6em;
+}
+
+.bicim {
+  font-size: 0.85em;
+  color: var(--soluk);
+}
+
+.bicim summary {
+  cursor: pointer;
+}
+
+.bicim p {
+  margin: 0.4em 0;
+}
+
+.bicim b {
+  color: var(--metin);
+}
+
+.baglanti {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--vurgu);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
 .bos-liste {
   padding: 0.5em 0.7em;
 }

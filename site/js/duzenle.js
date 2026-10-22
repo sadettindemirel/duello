@@ -313,20 +313,70 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  /** Var olan setlerle çakışmayan kısa ad: "9a-atom", "9a-atom-2", … */
+  function bosKisaAd(taban) {
+    const kullanilan = new Set(durum.setler.map((s) => s.id));
+    let id = taban;
+    for (let n = 2; kullanilan.has(id); n++) id = `${taban}-${n}`;
+    return id;
+  }
+
+  /** İçe aktarılan seti forma yeni set olarak yükler; kaydetmeden önce öğretmen kontrol eder. */
+  function iceAktarilanSet(set, uyarilar = []) {
+    if (!set.sorular.length) {
+      return bildir("Tabloda soru bulunamadı. İlk satırda Soru, A, B, C, D ve Doğru başlıkları olmalı.");
+    }
+    set.id = bosKisaAd(set.id || kisaAdUret(set.baslik) || "set");
+    setiCiz(set, null);
+    degisti();
+    hatalariGoster(uyarilar);
+    bildir(`${set.sorular.length} soru yüklendi. Kontrol edip Kaydet'e basın.`, "bilgi");
+  }
+
   async function iceAktar(e) {
     const dosya = e.target.files[0];
     e.target.value = "";
     if (!dosya || !vazgecilsinMi()) return;
-    let set;
+    const ad = dosya.name.replace(/\.[^.]+$/, "");
     try {
-      set = JSON.parse(await dosya.text());
-      if (!set || !Array.isArray(set.sorular)) throw new Error();
+      if (/\.json$/i.test(dosya.name)) {
+        const set = JSON.parse(await dosya.text());
+        if (!set || !Array.isArray(set.sorular)) throw new Error("Dosya bir Düello soru seti (JSON) değil.");
+        return iceAktarilanSet(set);
+      }
+      const { satirlar, uyarilar } = await DuelloTablo.dosyadanSatirlar(dosya);
+      const sonuc = DuelloTablo.tablodanSet(satirlar, ad);
+      iceAktarilanSet(sonuc.set, uyarilar.concat(sonuc.uyarilar));
     } catch (err) {
-      return bildir("Dosya bir Düello soru seti (JSON) değil.");
+      hataYaz(err instanceof SyntaxError ? new Error("Dosya okunamadı.") : err);
     }
-    setiCiz(set, null);
-    degisti();
-    bildir("İçe aktarıldı. Kontrol edip Kaydet'e basın.", "bilgi");
+  }
+
+  async function linktenGetir(e) {
+    e.preventDefault();
+    const url = $("tablo-linki").value.trim();
+    if (!url || !vazgecilsinMi()) return;
+    $("link-getir").disabled = true;
+    $("link-getir").textContent = "Getiriliyor…";
+    try {
+      const r = await ogretmenGet("tabloOku", { url });
+      const sonuc = DuelloTablo.tablodanSet(r.satirlar, r.ad);
+      iceAktarilanSet(sonuc.set, sonuc.uyarilar);
+      $("tablo-linki").value = "";
+    } catch (err) {
+      hataYaz(err);
+    } finally {
+      $("link-getir").disabled = false;
+      $("link-getir").textContent = "Getir";
+    }
+  }
+
+  function ornekIndir() {
+    const a = el("a");
+    a.href = URL.createObjectURL(new Blob([DuelloTablo.ornekCsv()], { type: "text/csv" }));
+    a.download = "duello-ornek.csv";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
   // ───────── olaylar ─────────
@@ -403,6 +453,8 @@
   $("set-sil").addEventListener("click", setiSil);
   $("json-indir").addEventListener("click", jsonIndir);
   $("ice-aktar").addEventListener("change", iceAktar);
+  $("link-formu").addEventListener("submit", linktenGetir);
+  $("ornek-indir").addEventListener("click", ornekIndir);
 
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && !$("set-formu").closest("[hidden]")) {

@@ -33,7 +33,7 @@
 **Soru düzenleyici güncellemesi (bir kez):** yeni `Code.gs`'i yapıştırdıktan sonra **`kurulum`**'u yeniden çalıştırın.
 `setler` ve `sorular` sekmelerini ekler (mevcut verilere dokunmaz) ve görsel yükleme için **Google Drive izni** ister;
 onaylayın. Ardından yukarıdaki gibi **Yeni sürüm** dağıtın. Yeni sürümün yayında olduğunu
-`?action=durum` yanıtındaki `"surum"` değeri gösterir (şu an `2026-10-21e`).
+`?action=durum` yanıtındaki `"surum"` değeri gösterir (şu an `2026-10-22a`).
 
 > `durum` sekmesi artık kullanılmıyor (anlık durum Script Properties'te); silebilirsiniz.
 
@@ -58,6 +58,8 @@ geçerse `site/` klasörünü yayınlar. Hatalı soru dosyası canlıya çıkmaz
   Drive linkleri tahtada `drive.google.com/thumbnail?id=…` adresine çevrilerek gösterilir.
   Okul hesabı (Workspace) kullanıyorsanız yöneticiniz dışarıya paylaşımı kapatmış olabilir; o zaman görseller açılmaz.
 - Tahta oturumu açarken bütün görselleri önceden indirir; açılmayan varsa soru numaralarını söyler.
+- İçe aktarma: Excel/CSV tarayıcıda okunur (Excel için SheetJS yalnızca gerektiğinde cdn.sheetjs.com'dan yüklenir).
+  Google E-Tablolar linki `tabloOku` ile web uygulamasını dağıtan hesabın yetkisiyle açılır; tablonun paylaşılması gerekmez.
 - Sesler [ses.js](site/js/ses.js) içinde Web Audio ile üretilir (ses dosyası yok).
 
 ## Puanlama ve Sheet (teknik)

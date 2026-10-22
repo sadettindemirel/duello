@@ -120,6 +120,8 @@ window.Duello = (() => {
     set_var: "Bu kısa adla başka bir set var; kısa adı değiştirin.",
     set_yok: "Soru seti bulunamadı (silinmiş olabilir).",
     gecersiz_gorsel: "Görsel PNG, JPG, GIF ya da WEBP olmalı ve 5 MB'ı geçmemeli.",
+    gecersiz_link: "Bu bir Google E-Tablolar linki değil (docs.google.com/spreadsheets/d/... olmalı).",
+    tablo_acilamadi: "Tablo açılamadı. Düello'yu kurduğunuz Google hesabının bu tabloya erişimi olmalı.",
   };
   const hataMetni = (e) => HATA_METINLERI[e && e.kod] || `Beklenmeyen hata: ${(e && e.kod) || e}`;
 
